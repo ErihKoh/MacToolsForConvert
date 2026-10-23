@@ -4,7 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.utils.file_info import format_size, get_file_info
+from src.utils.file_info import (
+    format_size,
+    get_directory_size,
+    get_file_info,
+)
 
 
 class TestFormatSize(unittest.TestCase):
@@ -69,7 +73,7 @@ class TestGetFileInfo(unittest.TestCase):
 
         self.assertEqual(info["name"], "documents")
         self.assertEqual(info["item_type"], "Папка")
-        self.assertEqual(info["size"], "—")
+        self.assertEqual(info["size"], "0 Б")
         self.assertEqual(info["path"], str(directory.resolve()))
 
     def test_missing_file(self) -> None:
@@ -77,6 +81,28 @@ class TestGetFileInfo(unittest.TestCase):
 
         with self.assertRaises(OSError):
             get_file_info(file_path)
+
+    def test_directory_size_includes_nested_files(self) -> None:
+        """Розмір папки включає файли з підпапок."""
+
+        (self.root / "first.txt").write_bytes(b"12345")
+
+        nested = self.root / "nested"
+        nested.mkdir()
+        (nested / "second.txt").write_bytes(b"1234567")
+
+        self.assertEqual(get_directory_size(self.root), 12)
+
+        info = get_file_info(self.root)
+        self.assertEqual(info["size"], "12 Б")
+
+    def test_empty_directory_size(self) -> None:
+        """Порожня папка має нульовий розмір."""
+
+        directory = self.root / "empty"
+        directory.mkdir()
+
+        self.assertEqual(get_directory_size(directory), 0)
 
 
 if __name__ == "__main__":

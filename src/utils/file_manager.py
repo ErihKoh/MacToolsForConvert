@@ -1,5 +1,6 @@
 """Керування колекцією файлів і папок MacTools."""
 
+import os
 from pathlib import Path
 
 from src.config import CATEGORIES
@@ -24,7 +25,7 @@ class FileManager:
         return len(self._files)
 
     def add_files(self, paths: list[str]) -> tuple[int, int]:
-        """Додає файли та папки.
+        """Додає файли та папки без рекурсивного обходу.
 
         Повертає пару:
         (кількість доданих елементів, кількість пропущених).
@@ -52,6 +53,81 @@ class FileManager:
 
             self._files[key] = path
             added_count += 1
+
+        return added_count, skipped_count
+
+    def add_directory_recursive(
+        self,
+        directory: str | Path,
+        include_directories: bool = False,
+    ) -> tuple[int, int]:
+        """Рекурсивно додає файли з папки та всіх її підпапок.
+
+        За замовчуванням додаються лише файли.
+        Якщо include_directories=True, додаються також підпапки.
+
+        Символічні посилання не обходяться, щоб уникнути циклів.
+        Повертає кількість доданих і пропущених елементів.
+        """
+
+        root = Path(directory)
+
+        if not root.is_dir():
+            return 0, 1
+
+        added_count = 0
+        skipped_count = 0
+
+        def on_walk_error(_error: OSError) -> None:
+            nonlocal skipped_count
+            skipped_count += 1
+
+        for current_root, dir_names, file_names in os.walk(
+            root,
+            topdown=True,
+            followlinks=False,
+            onerror=on_walk_error,
+        ):
+            current_path = Path(current_root)
+
+            # Символічні посилання на папки не обходяться.
+            dir_names[:] = [
+                name
+                for name in dir_names
+                if not (current_path / name).is_symlink()
+            ]
+
+            candidates = [current_path / name for name in file_names]
+
+            if include_directories:
+                candidates.extend(
+                    current_path / name for name in dir_names
+                )
+
+            for path in candidates:
+                if path.is_symlink():
+                    skipped_count += 1
+                    continue
+
+                try:
+                    if not path.is_file() and not (
+                        include_directories and path.is_dir()
+                    ):
+                        skipped_count += 1
+                        continue
+
+                    key = str(path.resolve(strict=True))
+
+                except (OSError, RuntimeError):
+                    skipped_count += 1
+                    continue
+
+                if key in self._files:
+                    skipped_count += 1
+                    continue
+
+                self._files[key] = path
+                added_count += 1
 
         return added_count, skipped_count
 

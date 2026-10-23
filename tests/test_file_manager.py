@@ -149,6 +149,48 @@ class TestFileManager(unittest.TestCase):
             {},
         )
 
+    def test_add_directory_recursive(self) -> None:
+        """Додає файли з усіх рівнів вкладених папок."""
+
+        root_file = self.root / "root.txt"
+        root_file.write_text("root", encoding="utf-8")
+
+        nested_dir = self.root / "nested" / "deeper"
+        nested_dir.mkdir(parents=True)
+
+        nested_file = nested_dir / "nested.txt"
+        nested_file.write_text("nested", encoding="utf-8")
+
+        added, skipped = self.manager.add_directory_recursive(
+            self.root
+        )
+
+        self.assertEqual(added, 2)
+        self.assertEqual(skipped, 0)
+        self.assertEqual(self.manager.count, 2)
+
+        names = {path.name for path in self.manager.files.values()}
+        self.assertEqual(names, {"root.txt", "nested.txt"})
+
+    def test_add_directory_recursive_skips_duplicates(self) -> None:
+        """Повторний рекурсивний обхід не дублює файли."""
+
+        file_path = self.root / "example.txt"
+        file_path.write_text("test", encoding="utf-8")
+
+        first_added, first_skipped = (
+            self.manager.add_directory_recursive(self.root)
+        )
+        second_added, second_skipped = (
+            self.manager.add_directory_recursive(self.root)
+        )
+
+        self.assertEqual(first_added, 1)
+        self.assertEqual(first_skipped, 0)
+        self.assertEqual(second_added, 0)
+        self.assertEqual(second_skipped, 1)
+        self.assertEqual(self.manager.count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,5 @@
 """Утиліти для отримання інформації про файли та папки."""
-
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
@@ -37,6 +37,53 @@ def format_size(size: int) -> str:
     return f"{size} Б"
 
 
+def get_directory_size(path: str | Path) -> int:
+    """Повертає сумарний розмір файлів у папці та підпапках.
+
+    Символічні посилання не обходяться.
+    Недоступні файли пропускаються.
+    """
+
+    root = Path(path)
+
+    if not root.is_dir():
+        raise NotADirectoryError(str(root))
+
+    total_size = 0
+
+    def on_walk_error(_error: OSError) -> None:
+        # Недоступні каталоги не переривають підрахунок.
+        return
+
+    for current_root, dir_names, file_names in os.walk(
+            root,
+            topdown=True,
+            followlinks=False,
+            onerror=on_walk_error,
+    ):
+        current_path = Path(current_root)
+
+        dir_names[:] = [
+            name
+            for name in dir_names
+            if not (current_path / name).is_symlink()
+        ]
+
+        for name in file_names:
+            file_path = current_path / name
+
+            if file_path.is_symlink():
+                continue
+
+            try:
+                if file_path.is_file():
+                    total_size += file_path.stat().st_size
+            except OSError:
+                continue
+
+    return total_size
+
+
 def get_file_info(path: str | Path) -> FileInfo:
     """Повертає метадані файлу або папки."""
 
@@ -45,7 +92,7 @@ def get_file_info(path: str | Path) -> FileInfo:
 
     if file_path.is_dir():
         item_type = "Папка"
-        size_text = "—"
+        size_text = format_size(get_directory_size(file_path))
     else:
         item_type = file_path.suffix.upper().lstrip(".")
 
