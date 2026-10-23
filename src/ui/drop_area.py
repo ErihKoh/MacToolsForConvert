@@ -4,6 +4,8 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFrame,
     QLabel,
@@ -108,17 +110,61 @@ class DropArea(QFrame):
         event.acceptProposedAction()
 
     def _browse_files(self) -> None:
-        """Відкриває системний діалог вибору файлів."""
+        """Дозволяє вибрати файли або поточну папку."""
 
-        paths, _ = QFileDialog.getOpenFileNames(
+        dialog = QFileDialog(
             self,
-            "Виберіть файли",
+            "Виберіть файли або папку",
             str(Path.home()),
-            "Усі файли (*)",
         )
 
-        if paths:
-            self._emit_valid_paths([Path(path) for path in paths])
+        dialog.setOption(
+            QFileDialog.Option.DontUseNativeDialog,
+            True,
+        )
+        dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
+
+        button_box = dialog.findChild(QDialogButtonBox)
+
+        if button_box is None:
+            # Не продовжуємо, якщо Qt не надав кнопкову панель.
+            return
+
+        folder_button = button_box.addButton(
+            "Вибрати цю папку",
+            QDialogButtonBox.ButtonRole.ActionRole,
+        )
+
+        def choose_current_folder() -> None:
+            """Передає шлях відкритої папки та закриває діалог."""
+
+            directory = Path(dialog.directory().absolutePath())
+
+            if directory.is_dir():
+                dialog.setProperty(
+                    "selectedDirectory",
+                    str(directory.resolve()),
+                )
+                dialog.done(QDialog.DialogCode.Accepted)
+
+        folder_button.clicked.connect(choose_current_folder)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        selected_directory = dialog.property("selectedDirectory")
+
+        if selected_directory:
+            self._emit_valid_paths([Path(selected_directory)])
+            return
+
+        paths = [
+            Path(path)
+            for path in dialog.selectedFiles()
+            if Path(path).is_file()
+        ]
+
+        self._emit_valid_paths(paths)
 
     def _emit_valid_paths(self, paths: list[Path]) -> None:
         """Перевіряє шляхи та передає унікальні файли й папки."""

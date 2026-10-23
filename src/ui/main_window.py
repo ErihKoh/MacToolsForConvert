@@ -149,26 +149,48 @@ class MainWindow(QMainWindow):
         )
 
     def _add_files(self, paths: list[str]) -> None:
-        """Додає нові файли та папки до колекції."""
+        """Додає окремі файли або файли з вибраних папок."""
 
-        added_count, skipped_count = self.file_manager.add_files(paths)
+        added_count = 0
+        skipped_count = 0
 
-        # Показуємо всі додані елементи.
+        for raw_path in paths:
+            path = Path(raw_path)
+
+            if not path.exists():
+                skipped_count += 1
+                continue
+
+            if path.is_dir():
+                added, skipped = self.file_manager.add_directory_recursive(
+                    path
+                )
+            elif path.is_file():
+                added, skipped = self.file_manager.add_files(
+                    [str(path)]
+                )
+            else:
+                skipped_count += 1
+                continue
+
+            added_count += added
+            skipped_count += skipped
+
         all_index = self.category_names.index("Усі")
         self.category_tabs.setCurrentIndex(all_index)
 
         self._refresh_file_list()
 
         if added_count:
-            message = f"Додано елементів: {added_count}."
+            message = f"Додано файлів: {added_count}."
         else:
-            message = "Нових елементів не додано."
+            message = "Нових файлів не додано."
 
         if skipped_count:
             message += f" Пропущено: {skipped_count}."
 
         self.statusBar().showMessage(
-            f"{message} Усього: {self.file_manager.count}."
+            f"{message} Усього файлів: {self.file_manager.count}."
         )
 
     def _clear_files(self) -> None:
