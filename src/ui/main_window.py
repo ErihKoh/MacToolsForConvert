@@ -4,10 +4,8 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QFrame,
     QHBoxLayout,
     QLabel,
-    QListWidget,
     QListWidgetItem,
     QMainWindow,
     QPushButton,
@@ -24,7 +22,9 @@ from src.config import (
     WINDOW_WIDTH,
 )
 from src.ui.drop_area import DropArea
-from src.utils.file_info import get_file_info
+from src.ui.file_info_panel import FileInfoPanel
+from src.ui.file_list_panel import FileListPanel
+from src.utils.file_manager import FileManager
 
 
 class MainWindow(QMainWindow):
@@ -36,8 +36,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_DISPLAY_NAME)
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
 
-        # Шляхи зберігаються за їхнім нормалізованим представленням.
-        self._files: dict[str, Path] = {}
+        # Менеджер відповідає за колекцію файлів.
+
+        self.file_manager = FileManager()
 
         self._active_category = "Усі"
 
@@ -114,96 +115,18 @@ class MainWindow(QMainWindow):
         content_layout.setSpacing(14)
 
         # Ліва частина — список.
-        files_panel = QFrame()
-        files_panel.setObjectName("filesPanel")
+        # Ліва частина — список файлів.
+        self.files_panel = FileListPanel(self)
 
-        files_layout = QVBoxLayout(files_panel)
-        files_layout.setContentsMargins(12, 12, 12, 12)
-        files_layout.setSpacing(10)
-
-        files_header = QHBoxLayout()
-
-        self.files_label = QLabel("Додані елементи")
-        self.files_label.setObjectName("sectionLabel")
-
-        self.files_count_label = QLabel("0")
-        self.files_count_label.setObjectName("countLabel")
-
-        files_header.addWidget(self.files_label)
-        files_header.addStretch()
-        files_header.addWidget(self.files_count_label)
-
-        self.files_list = QListWidget()
-        self.files_list.setObjectName("filesList")
-        self.files_list.setAlternatingRowColors(True)
-        self.files_list.setSelectionMode(
-            QListWidget.SelectionMode.ExtendedSelection
-        )
-
-        self.files_list.setMinimumWidth(300)
-
-        files_layout.addLayout(files_header)
-        files_layout.addWidget(self.files_list)
+        # Зберігаємо сумісність з наявними методами MainWindow.
+        self.files_list = self.files_panel.files_list
+        self.files_count_label = self.files_panel.count_label
 
         # Права частина — інформація про вибраний елемент.
-        self.info_panel = QFrame()
-        self.info_panel.setObjectName("infoPanel")
-        self.info_panel.setMinimumWidth(250)
-        self.info_panel.setMaximumWidth(340)
+        self.info_panel = FileInfoPanel(self)
 
-        info_layout = QVBoxLayout(self.info_panel)
-        info_layout.setContentsMargins(16, 16, 16, 16)
-        info_layout.setSpacing(12)
+        content_layout.addWidget(self.files_panel, 1)
 
-        self.info_title = QLabel("Інформація")
-        self.info_title.setObjectName("sectionLabel")
-
-        self.info_name = QLabel("Файл не вибрано")
-        self.info_name.setObjectName("infoName")
-        self.info_name.setWordWrap(True)
-        self.info_name.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-
-        self.info_type = QLabel("Тип: —")
-        self.info_size = QLabel("Розмір: —")
-        self.info_modified = QLabel("Змінено: —")
-        self.info_created = QLabel("Створено: —")
-        self.info_path = QLabel("Шлях: —")
-
-        self.info_path.setObjectName("infoPath")
-        self.info_path.setWordWrap(True)
-        self.info_path.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-
-        self.info_labels = [
-            self.info_type,
-            self.info_size,
-            self.info_modified,
-            self.info_created,
-            self.info_path,
-        ]
-
-        for label in self.info_labels:
-            label.setObjectName("infoValue")
-            label.setWordWrap(True)
-            label.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextSelectableByMouse
-            )
-
-        info_layout.addWidget(self.info_title)
-        info_layout.addWidget(self.info_name)
-        info_layout.addSpacing(4)
-        info_layout.addWidget(self.info_type)
-        info_layout.addWidget(self.info_size)
-        info_layout.addWidget(self.info_modified)
-        info_layout.addWidget(self.info_created)
-        info_layout.addSpacing(4)
-        info_layout.addWidget(self.info_path)
-        info_layout.addStretch()
-
-        content_layout.addWidget(files_panel, 1)
         content_layout.addWidget(self.info_panel)
 
         main_layout.addLayout(content_layout, 1)
@@ -228,31 +151,9 @@ class MainWindow(QMainWindow):
     def _add_files(self, paths: list[str]) -> None:
         """Додає нові файли та папки до колекції."""
 
-        added_count = 0
-        skipped_count = 0
+        added_count, skipped_count = self.file_manager.add_files(paths)
 
-        for raw_path in paths:
-            path = Path(raw_path)
-
-            if not path.exists():
-                skipped_count += 1
-                continue
-
-            try:
-                key = str(path.resolve(strict=True))
-            except (OSError, RuntimeError):
-                skipped_count += 1
-                continue
-
-            if key in self._files:
-                skipped_count += 1
-                continue
-
-            self._files[key] = path
-            added_count += 1
-
-        # Показуємо всі додані елементи, щоб користувач одразу
-        # бачив результат перетягування.
+        # Показуємо всі додані елементи.
         all_index = self.category_names.index("Усі")
         self.category_tabs.setCurrentIndex(all_index)
 
@@ -267,17 +168,17 @@ class MainWindow(QMainWindow):
             message += f" Пропущено: {skipped_count}."
 
         self.statusBar().showMessage(
-            f"{message} Усього: {len(self._files)}."
+            f"{message} Усього: {self.file_manager.count}."
         )
 
     def _clear_files(self) -> None:
         """Очищає список доданих файлів."""
 
-        if not self._files:
+        if self.file_manager.count == 0:
             self.statusBar().showMessage("Список уже порожній.")
             return
 
-        self._files.clear()
+        self.file_manager.clear()
         self._refresh_file_list()
 
         self.statusBar().showMessage("Список файлів очищено.")
@@ -302,56 +203,32 @@ class MainWindow(QMainWindow):
 
         self.files_list.clear()
 
-        for key, path in self._files.items():
-            if not self._matches_category(path):
-                continue
+        filtered_files = self.file_manager.get_filtered_files(
+            self._active_category
+        )
 
+        for key, path in filtered_files.items():
             item = QListWidgetItem()
 
             if path.is_dir():
                 item.setText(f"▰  {path.name}")
-                item.setData(
-                    Qt.ItemDataRole.UserRole,
-                    key,
-                )
             else:
                 item.setText(f"   {path.name}")
-                item.setData(
-                    Qt.ItemDataRole.UserRole,
-                    key,
-                )
 
+            item.setData(
+                Qt.ItemDataRole.UserRole,
+                key,
+            )
             item.setToolTip(str(path))
             self.files_list.addItem(item)
 
-        self.files_count_label.setText(
-            str(self.files_list.count())
-        )
-
+        self.files_panel.update_count()
         self._update_file_info(None)
 
-    def _matches_category(self, path: Path) -> bool:
-        """Перевіряє, чи належить елемент до категорії."""
-
-        if self._active_category == "Усі":
-            return True
-
-        if path.is_dir():
-            return False
-
-        extension = path.suffix.lower()
-
-        extensions = CATEGORIES.get(
-            self._active_category,
-            set(),
-        )
-
-        return extension in extensions
-
     def _on_selection_changed(
-        self,
-        current: QListWidgetItem | None,
-        previous: QListWidgetItem | None,
+            self,
+            current: QListWidgetItem | None,
+            previous: QListWidgetItem | None,
     ) -> None:
         """Оновлює інформаційну панель."""
 
@@ -360,40 +237,11 @@ class MainWindow(QMainWindow):
             return
 
         key = current.data(Qt.ItemDataRole.UserRole)
-        path = self._files.get(key)
+        path = self.file_manager.files.get(key)
 
         self._update_file_info(path)
 
     def _update_file_info(self, path: Path | None) -> None:
-        """Відображає властивості вибраного елемента."""
+        """Передає вибраний елемент інформаційній панелі."""
 
-        if path is None:
-            self.info_name.setText("Файл не вибрано")
-            self.info_type.setText("Тип: —")
-            self.info_size.setText("Розмір: —")
-            self.info_modified.setText("Змінено: —")
-            self.info_created.setText("Створено: —")
-            self.info_path.setText("Шлях: —")
-            return
-
-        try:
-            info = get_file_info(path)
-
-            self.info_name.setText(info["name"])
-            self.info_type.setText(f"Тип: {info['item_type']}")
-            self.info_size.setText(f"Розмір: {info['size']}")
-            self.info_modified.setText(
-                f"Змінено: {info['modified']}"
-            )
-            self.info_created.setText(
-                f"Створено: {info['created']}"
-            )
-            self.info_path.setText(f"Шлях: {info['path']}")
-
-        except OSError:
-            self.info_name.setText(path.name or str(path))
-            self.info_type.setText("Тип: недоступний")
-            self.info_size.setText("Розмір: недоступний")
-            self.info_modified.setText("Змінено: недоступно")
-            self.info_created.setText("Створено: недоступно")
-            self.info_path.setText(f"Шлях: {path}")
+        self.info_panel.update_info(path)

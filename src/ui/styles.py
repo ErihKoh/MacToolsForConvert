@@ -157,8 +157,8 @@ QLabel#infoValue {
 }
 
 QLabel#infoPath {
-    color: #8ab4f8;
-    font-size: 11px;
+    color: #b9bec7;
+    font-size: 12px;
 }
 """
 
@@ -320,8 +320,8 @@ QLabel#infoValue {
 }
 
 QLabel#infoPath {
-    color: #245db5;
-    font-size: 11px;
+    color: #60656f;
+    font-size: 12px;
 }
 """
 
