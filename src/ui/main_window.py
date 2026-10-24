@@ -1,5 +1,4 @@
 """Головне вікно MacTools."""
-
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -8,6 +7,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QTabBar,
     QVBoxLayout,
@@ -18,9 +18,14 @@ from src.config import (
     APP_DISPLAY_NAME,
     APP_VERSION,
     CATEGORIES,
+    OUTPUT_DIR,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
 )
+from src.converters.registry import ConverterRegistry
+from src.converters.setup import create_default_registry
+from src.services.conversion_service import ConversionService
+from src.ui.conversion_panel import ConversionPanel
 from src.ui.drop_area import DropArea
 from src.ui.file_info_panel import FileInfoPanel
 from src.ui.file_list_panel import FileListPanel
@@ -30,15 +35,29 @@ from src.utils.file_manager import FileManager
 class MainWindow(QMainWindow):
     """Головне вікно MacTools."""
 
-    def __init__(self) -> None:
+    def __init__(
+            self,
+            registry: ConverterRegistry | None = None,
+    ) -> None:
         super().__init__()
 
         self.setWindowTitle(APP_DISPLAY_NAME)
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
 
-        # Менеджер відповідає за колекцію файлів.
-
+        # Колекція доданих файлів.
         self.file_manager = FileManager()
+
+        # Реєстр доступних конвертерів.
+        self.converter_registry = (
+            registry
+            if registry is not None
+            else create_default_registry()
+        )
+
+        # Сервіс конвертації.
+        self.conversion_service = ConversionService(
+            self.converter_registry
+        )
 
         self._active_category = "Усі"
 
@@ -46,8 +65,11 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._refresh_file_list()
 
+        converter_count = len(self.converter_registry)
+
         self.statusBar().showMessage(
-            f"MacTools {APP_VERSION} готовий до роботи"
+            f"MacTools {APP_VERSION} готовий до роботи. "
+            f"Доступно конвертерів: {converter_count}."
         )
 
     def _setup_ui(self) -> None:
@@ -110,26 +132,26 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(self.category_tabs)
 
-        # Основна область: список та інформація.
+        # Основна область: список файлів та інформація.
         content_layout = QHBoxLayout()
         content_layout.setSpacing(14)
 
-        # Ліва частина — список.
-        # Ліва частина — список файлів.
         self.files_panel = FileListPanel(self)
 
-        # Зберігаємо сумісність з наявними методами MainWindow.
+        # Зберігаємо сумісність із наявними методами.
         self.files_list = self.files_panel.files_list
         self.files_count_label = self.files_panel.count_label
 
-        # Права частина — інформація про вибраний елемент.
         self.info_panel = FileInfoPanel(self)
 
         content_layout.addWidget(self.files_panel, 1)
-
         content_layout.addWidget(self.info_panel)
 
         main_layout.addLayout(content_layout, 1)
+
+        # Панель налаштування конвертації.
+        self.conversion_panel = ConversionPanel(self)
+        main_layout.addWidget(self.conversion_panel)
 
         self.setCentralWidget(central_widget)
 
@@ -137,7 +159,6 @@ class MainWindow(QMainWindow):
         """Підключає сигнали інтерфейсу."""
 
         self.drop_area.files_added.connect(self._add_files)
-
         self.clear_button.clicked.connect(self._clear_files)
 
         self.category_tabs.currentChanged.connect(
@@ -148,8 +169,12 @@ class MainWindow(QMainWindow):
             self._on_selection_changed
         )
 
+        self.conversion_panel.convert_requested.connect(
+            self._convert_files
+        )
+
     def _add_files(self, paths: list[str]) -> None:
-        """Додає окремі файли або файли з вибраних папок."""
+        """Додає файли або рекурсивно обходить вибрані папки."""
 
         added_count = 0
         skipped_count = 0
@@ -162,8 +187,8 @@ class MainWindow(QMainWindow):
                 continue
 
             if path.is_dir():
-                added, skipped = self.file_manager.add_directory_recursive(
-                    path
+                added, skipped = (
+                    self.file_manager.add_directory_recursive(path)
                 )
             elif path.is_file():
                 added, skipped = self.file_manager.add_files(
@@ -212,7 +237,6 @@ class MainWindow(QMainWindow):
             return
 
         self._active_category = self.category_names[index]
-
         self._refresh_file_list()
 
         self.statusBar().showMessage(
@@ -221,7 +245,7 @@ class MainWindow(QMainWindow):
         )
 
     def _refresh_file_list(self) -> None:
-        """Оновлює видимий список відповідно до категорії."""
+        """Оновлює список відповідно до вибраної категорії."""
 
         self.files_list.clear()
 
@@ -237,10 +261,7 @@ class MainWindow(QMainWindow):
             else:
                 item.setText(f"   {path.name}")
 
-            item.setData(
-                Qt.ItemDataRole.UserRole,
-                key,
-            )
+            item.setData(Qt.ItemDataRole.UserRole, key)
             item.setToolTip(str(path))
             self.files_list.addItem(item)
 
@@ -267,3 +288,102 @@ class MainWindow(QMainWindow):
         """Передає вибраний елемент інформаційній панелі."""
 
         self.info_panel.update_info(path)
+
+    def _convert_files(
+            self,
+            output_format: str,
+            output_directory: str,
+    ) -> None:
+        """Конвертує вибрані файли або всі файли зі списку."""
+
+        output_path = Path(output_directory).expanduser()
+
+        if not output_directory:
+            self.statusBar().showMessage(
+                "Вкажіть папку для збереження результатів."
+            )
+            return
+
+        if not output_path.is_dir():
+            QMessageBox.warning(
+                self,
+                "Папку не знайдено",
+                "Вибрана папка для результатів не існує. "
+                "Виберіть наявну папку.",
+            )
+            return
+
+        # Якщо користувач виділив елементи, обробляємо їх.
+        # Інакше беремо всі файли зі списку.
+        selected_items = self.files_list.selectedItems()
+
+        if selected_items:
+            source_paths = [
+                self.file_manager.files.get(
+                    item.data(Qt.ItemDataRole.UserRole)
+                )
+                for item in selected_items
+            ]
+        else:
+            source_paths = list(self.file_manager.files.values())
+
+        # До конвертації допускаємо лише наявні файли,
+        # а не папки.
+        files_to_convert = [
+            path
+            for path in source_paths
+            if path is not None and path.is_file()
+        ]
+
+        if not files_to_convert:
+            QMessageBox.information(
+                self,
+                "Немає файлів",
+                "Додайте файли або виберіть файли для конвертації.",
+            )
+            return
+
+        results = self.conversion_service.convert_files(
+            sources=files_to_convert,
+            output_directory=output_path,
+            output_format=output_format,
+        )
+
+        success_count = sum(
+            result.success for result in results
+        )
+        failure_count = len(results) - success_count
+
+        message = (
+            f"Конвертацію завершено. Успішно: {success_count}; "
+            f"помилок: {failure_count}."
+        )
+
+        self.statusBar().showMessage(message)
+
+        if failure_count:
+            errors = [
+                f"{result.source.name}: {result.error}"
+                for result in results
+                if not result.success
+            ]
+
+            details = "\n".join(errors[:10])
+
+            if len(errors) > 10:
+                details += (
+                    f"\n… та ще {len(errors) - 10} помилок."
+                )
+
+            QMessageBox.warning(
+                self,
+                "Результати конвертації",
+                f"{message}\n\n{details}",
+            )
+        else:
+            QMessageBox.information(
+                self,
+                "Результати конвертації",
+                f"{message}\n"
+                f"Папка результатів:\n{output_path}",
+            )

@@ -55,9 +55,3 @@ class FileListPanel(QFrame):
         self.count_label.setText(
             str(self.files_list.count())
         )
-
-    def clear_list(self) -> None:
-        """Очищає список і скидає лічильник."""
-
-        self.files_list.clear()
-        self.update_count()
