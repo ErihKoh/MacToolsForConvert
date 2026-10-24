@@ -1,6 +1,7 @@
 """Панель налаштування конвертації файлів MacTools."""
 
 from pathlib import Path
+from typing import Iterable
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -15,19 +16,23 @@ from PySide6.QtWidgets import (
 )
 
 from src.config import OUTPUT_DIR
+from src.converters.formats import IMAGE_FORMATS, PDF_FORMATS, DOCUMENT_FORMATS, normalize_format, \
+    get_format_display_name
 
 
 class ConversionPanel(QFrame):
     """"Панель вибору формату та папки для конвертації."""
     convert_requested = Signal(str, str)
 
+    ALL_FORMATS = set(IMAGE_FORMATS) | set(PDF_FORMATS) | set(DOCUMENT_FORMATS)
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
 
         self.setObjectName("conversionPanel")
-
         self._setup_ui()
         self._connect_signals()
+        self.set_available_formats(self.ALL_FORMATS)
 
     def _setup_ui(self) -> None:
         """Створює елементи інтерфейсу панелі."""
@@ -36,12 +41,10 @@ class ConversionPanel(QFrame):
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(10)
 
-        # Заголовок панелі.
         self.title_label = QLabel("Конвертація файлів")
         self.title_label.setObjectName("sectionLabel")
         main_layout.addWidget(self.title_label)
 
-        # Вибір вихідного формату.
         format_layout = QHBoxLayout()
         format_layout.setSpacing(10)
 
@@ -51,26 +54,10 @@ class ConversionPanel(QFrame):
         self.format_combo = QComboBox()
         self.format_combo.setObjectName("outputFormatCombo")
 
-        formats = [
-            ("JPEG (.jpg)", "jpg"),
-            ("PNG (.png)", "png"),
-            ("WebP (.webp)", "webp"),
-            ("TIFF (.tiff)", "tiff"),
-            ("BMP (.bmp)", "bmp"),
-            ("PDF (.pdf)", "pdf"),
-            ("Word (.docx)", "docx"),
-            ("Текст (.txt)", "txt"),
-            ("Rich Text (.rtf)", "rtf"),
-        ]
-
-        for label, extension in formats:
-            self.format_combo.addItem(label, extension)
-
         format_layout.addWidget(self.format_label)
         format_layout.addWidget(self.format_combo, 1)
         main_layout.addLayout(format_layout)
 
-        # Вибір папки для результатів.
         directory_label = QLabel("Папка для результатів:")
         directory_label.setObjectName("fieldLabel")
         main_layout.addWidget(directory_label)
@@ -99,7 +86,6 @@ class ConversionPanel(QFrame):
         directory_layout.addWidget(self.browse_directory_button)
         main_layout.addLayout(directory_layout)
 
-        # Кнопка запуску.
         self.convert_button = QPushButton("Конвертувати")
         self.convert_button.setObjectName("convertButton")
         self.convert_button.setCursor(
@@ -121,6 +107,46 @@ class ConversionPanel(QFrame):
             self._request_conversion
         )
 
+    def set_available_formats(
+            self,
+            formats: Iterable[str],
+    ) -> None:
+        """Встановлює список доступних вихідних форматів."""
+
+        available = {
+            normalize_format(fmt)
+            for fmt in formats
+            if normalize_format(fmt)
+        }
+
+        previous_format = self.format_combo.currentData()
+
+        self.format_combo.blockSignals(True)
+        self.format_combo.clear()
+
+        for extension in sorted(available):
+            self.format_combo.addItem(
+                get_format_display_name(extension),
+                extension,
+            )
+
+        previous_index = self.format_combo.findData(previous_format)
+
+        if previous_index >= 0:
+            self.format_combo.setCurrentIndex(previous_index)
+
+        self.format_combo.blockSignals(False)
+
+        has_formats = self.format_combo.count() > 0
+        self.format_combo.setEnabled(has_formats)
+        self.convert_button.setEnabled(has_formats)
+
+        if not has_formats:
+            self.format_combo.addItem(
+                "Немає сумісних форматів",
+                "",
+            )
+
     def _browse_output_directory(self) -> None:
         """Відкриває діалог вибору папки результатів."""
 
@@ -141,8 +167,11 @@ class ConversionPanel(QFrame):
     def _request_conversion(self) -> None:
         """Передає параметри конвертації головному вікну."""
 
-        output_format = str(self.format_combo.currentData())
+        output_format = str(self.format_combo.currentData() or "")
         output_directory = self.output_directory_edit.text().strip()
+
+        if not output_format:
+            return
 
         self.convert_requested.emit(
             output_format,

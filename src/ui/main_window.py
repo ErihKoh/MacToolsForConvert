@@ -207,6 +207,10 @@ class MainWindow(QMainWindow):
             self._on_selection_changed
         )
 
+        self.files_list.itemSelectionChanged.connect(
+            self._update_available_output_formats
+        )
+
         self.conversion_panel.convert_requested.connect(
             self._convert_files
         )
@@ -317,6 +321,7 @@ class MainWindow(QMainWindow):
 
         self.files_panel.update_count()
         self._update_file_info(None)
+        self._update_available_output_formats()
 
     def _on_selection_changed(
         self,
@@ -338,6 +343,47 @@ class MainWindow(QMainWindow):
         """Передає вибраний елемент інформаційній панелі."""
 
         self.info_panel.update_info(path)
+
+    def _update_available_output_formats(self) -> None:
+        """Оновлює вихідні формати відповідно до вибраних файлів."""
+
+        selected_items = self.files_list.selectedItems()
+
+        if selected_items:
+            source_paths = [
+                self.file_manager.files.get(
+                    item.data(Qt.ItemDataRole.UserRole)
+                )
+                for item in selected_items
+            ]
+        else:
+            source_paths = list(self.file_manager.files.values())
+
+        source_paths = [
+            path
+            for path in source_paths
+            if path is not None and path.is_file()
+        ]
+
+        if not source_paths:
+            self.conversion_panel.set_available_formats([])
+            return
+
+        compatible_formats = {
+            output_format
+            for output_format in self.conversion_panel.ALL_FORMATS
+            if all(
+                self.converter_registry.find(
+                    path.suffix.lower().lstrip("."),
+                    output_format,
+                ) is not None
+                for path in source_paths
+            )
+        }
+
+        self.conversion_panel.set_available_formats(
+            compatible_formats
+        )
 
     def _convert_files(
         self,
