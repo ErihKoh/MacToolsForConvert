@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QVBoxLayout,
+    QProgressBar,
 )
 
 from src.config import OUTPUT_DIR
@@ -97,6 +98,34 @@ class ConversionPanel(QFrame):
             alignment=Qt.AlignmentFlag.AlignRight,
         )
 
+        # Індикатор прогресу конвертації.
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setObjectName("conversionProgressBar")
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setFormat("Готовність: %p%")
+        self.progress_bar.hide()
+
+        main_layout.addWidget(self.progress_bar)
+
+        # Кнопка скасування конвертації.
+        self.cancel_conversion_button = QPushButton(
+            "Скасувати конвертацію"
+        )
+        self.cancel_conversion_button.setObjectName(
+            "cancelConversionButton"
+        )
+        self.cancel_conversion_button.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
+        self.cancel_conversion_button.hide()
+
+        main_layout.addWidget(
+            self.cancel_conversion_button,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
+
     def _connect_signals(self) -> None:
         """Підключає обробники натискання кнопок."""
 
@@ -106,6 +135,46 @@ class ConversionPanel(QFrame):
         self.convert_button.clicked.connect(
             self._request_conversion
         )
+
+    def set_conversion_running(self, total: int) -> None:
+        """Готує панель до виконання конвертації."""
+
+        self.progress_bar.setRange(0, total)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat(f"0 із {total} файлів")
+        self.progress_bar.show()
+
+        self.cancel_conversion_button.setEnabled(True)
+        self.cancel_conversion_button.show()
+        self.convert_button.setEnabled(False)
+
+    def update_conversion_progress(
+            self,
+            current: int,
+            total: int,
+            filename: str,
+    ) -> None:
+        """Оновлює прогрес і назву поточного файла."""
+
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(current - 1)
+        self.progress_bar.setFormat(
+            f"{current} із {total}: {filename}"
+        )
+
+    def set_conversion_idle(self) -> None:
+        """Відновлює початковий стан панелі."""
+
+        self.convert_button.setEnabled(
+            self.format_combo.count() > 0
+        )
+
+        self.cancel_conversion_button.setEnabled(True)
+        self.cancel_conversion_button.hide()
+
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("Готовність: %p%")
+        self.progress_bar.hide()
 
     def set_available_formats(
             self,

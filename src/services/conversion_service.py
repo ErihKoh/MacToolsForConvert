@@ -123,6 +123,30 @@ class ConversionService:
 
         return results
 
+    def get_available_formats(
+        self,
+        sources: Iterable[str | Path],
+        output_formats: Iterable[str],
+    ) -> set[str]:
+        """Повертає формати, сумісні з усіма вхідними файлами."""
+
+        source_paths = [Path(source) for source in sources]
+
+        if not source_paths:
+            return set()
+
+        return {
+            output_format
+            for output_format in output_formats
+            if all(
+                self._registry.find(
+                    path.suffix.lower().lstrip("."),
+                    output_format,
+                ) is not None
+                for path in source_paths
+            )
+        }
+
     @staticmethod
     def _build_destination(
         source_path: Path,

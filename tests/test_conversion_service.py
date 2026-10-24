@@ -126,6 +126,46 @@ class TestConversionService(unittest.TestCase):
         self.assertTrue(first.destination.exists())
         self.assertTrue(second.destination.exists())
 
+    def test_get_available_formats_for_png(self) -> None:
+        """Повертає формати, доступні для PNG."""
+
+        source = self.create_png()
+
+        formats = self.service.get_available_formats(
+            sources=[source],
+            output_formats=["jpg", "webp", "pdf"],
+        )
+
+        self.assertEqual(formats, {"jpg", "webp", "pdf"})
+
+    def test_get_available_formats_for_multiple_files(self) -> None:
+        """Повертає формати, сумісні з усіма файлами."""
+
+        png_file = self.create_png("image.png")
+
+        jpeg_file = self.root / "image.jpg"
+        Image.new("RGB", (100, 100), color="blue").save(
+            jpeg_file,
+            format="JPEG",
+        )
+
+        formats = self.service.get_available_formats(
+            sources=[png_file, jpeg_file],
+            output_formats=["jpg", "webp", "png", "pdf"],
+        )
+
+        self.assertEqual(formats, {"jpg", "webp", "png", "pdf"})
+
+    def test_get_available_formats_for_empty_sources(self) -> None:
+        """Повертає порожню множину без вхідних файлів."""
+
+        formats = self.service.get_available_formats(
+            sources=[],
+            output_formats=["jpg", "webp"],
+        )
+
+        self.assertEqual(formats, set())
+
     def test_unsupported_format(self) -> None:
         """Перевіряє відмову від непідтримуваної пари форматів."""
 

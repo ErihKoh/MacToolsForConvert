@@ -1,11 +1,13 @@
 """Панель зі списком доданих файлів і папок."""
+from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
-    QVBoxLayout,
+    QVBoxLayout, QListWidgetItem,
 )
 
 
@@ -48,6 +50,24 @@ class FileListPanel(QFrame):
 
         layout.addLayout(header_layout)
         layout.addWidget(self.files_list)
+
+    def set_files(self, files: dict[str, Path]) -> None:
+        """Відображає передані файли та папки у списку."""
+        self.files_list.clear()
+
+        for key, path in files.items():
+            item = QListWidgetItem()
+
+            if path.is_dir():
+                item.setText(f"▰  {path.name}")
+            else:
+                item.setText(f"   {path.name}")
+
+            item.setData(Qt.ItemDataRole.UserRole, key)
+            item.setToolTip(str(path))
+            self.files_list.addItem(item)
+
+        self.update_count()
 
     def update_count(self) -> None:
         """Оновлює лічильник видимих елементів."""
