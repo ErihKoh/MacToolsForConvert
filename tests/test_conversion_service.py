@@ -127,10 +127,10 @@ class TestConversionService(unittest.TestCase):
         self.assertTrue(second.destination.exists())
 
     def test_unsupported_format(self) -> None:
-        """Перевіряє відмову від непідтримуваного формату."""
+        """Перевіряє відмову від непідтримуваної пари форматів."""
 
-        source = self.root / "document.pdf"
-        source.write_bytes(b"test")
+        source = self.root / "document.txt"
+        source.write_text("Тестовий документ", encoding="utf-8")
 
         result = self.service.convert_file(
             source=source,

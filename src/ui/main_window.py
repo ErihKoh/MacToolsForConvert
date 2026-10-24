@@ -1,7 +1,9 @@
 """Головне вікно MacTools."""
+
 from pathlib import Path
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -9,22 +11,25 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QProgressBar,
     QTabBar,
     QVBoxLayout,
-    QWidget, QProgressBar,
+    QWidget,
 )
 
 from src.config import (
     APP_DISPLAY_NAME,
     APP_VERSION,
     CATEGORIES,
-    OUTPUT_DIR,
     WINDOW_HEIGHT,
     WINDOW_WIDTH,
 )
 from src.converters.registry import ConverterRegistry
 from src.converters.setup import create_default_registry
-from src.services.conversion_service import ConversionService, ConversionResult
+from src.services.conversion_service import (
+    ConversionResult,
+    ConversionService,
+)
 from src.services.conversion_worker import ConversionWorker
 from src.ui.conversion_panel import ConversionPanel
 from src.ui.drop_area import DropArea
@@ -37,8 +42,8 @@ class MainWindow(QMainWindow):
     """Головне вікно MacTools."""
 
     def __init__(
-            self,
-            registry: ConverterRegistry | None = None,
+        self,
+        registry: ConverterRegistry | None = None,
     ) -> None:
         super().__init__()
 
@@ -62,6 +67,10 @@ class MainWindow(QMainWindow):
         # Стан поточної конвертації.
         self._conversion_worker: ConversionWorker | None = None
         self._conversion_results: list[ConversionResult] = []
+        self._conversion_error: str | None = None
+
+        # Стан закриття вікна.
+        self._close_after_conversion = False
 
         self._setup_ui()
         self._connect_signals()
@@ -140,7 +149,6 @@ class MainWindow(QMainWindow):
 
         self.files_panel = FileListPanel(self)
 
-        # Сумісність із наявними методами.
         self.files_list = self.files_panel.files_list
         self.files_count_label = self.files_panel.count_label
 
@@ -166,7 +174,7 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(self.progress_bar)
 
-        # Кнопка скасування поточної пакетної операції.
+        # Кнопка скасування.
         self.cancel_conversion_button = QPushButton(
             "Скасувати конвертацію"
         )
@@ -311,9 +319,9 @@ class MainWindow(QMainWindow):
         self._update_file_info(None)
 
     def _on_selection_changed(
-            self,
-            current: QListWidgetItem | None,
-            previous: QListWidgetItem | None,
+        self,
+        current: QListWidgetItem | None,
+        previous: QListWidgetItem | None,
     ) -> None:
         """Оновлює інформаційну панель."""
 
@@ -332,9 +340,9 @@ class MainWindow(QMainWindow):
         self.info_panel.update_info(path)
 
     def _convert_files(
-            self,
-            output_format: str,
-            output_directory: str,
+        self,
+        output_format: str,
+        output_directory: str,
     ) -> None:
         """Запускає пакетну конвертацію у фоновому потоці."""
 
@@ -387,20 +395,22 @@ class MainWindow(QMainWindow):
             return
 
         self._conversion_results.clear()
+        self._conversion_error = None
+        self._close_after_conversion = False
 
-        self.progress_bar.setRange(0, len(files_to_convert))
+        total = len(files_to_convert)
+
+        self.progress_bar.setRange(0, total)
         self.progress_bar.setValue(0)
-        self.progress_bar.setFormat(
-            f"0 із {len(files_to_convert)} файлів"
-        )
+        self.progress_bar.setFormat(f"0 із {total} файлів")
         self.progress_bar.show()
 
+        self.cancel_conversion_button.setEnabled(True)
         self.cancel_conversion_button.show()
         self.conversion_panel.convert_button.setEnabled(False)
 
         self.statusBar().showMessage(
-            f"Підготовлено файлів до конвертації: "
-            f"{len(files_to_convert)}."
+            f"Підготовлено файлів до конвертації: {total}."
         )
 
         worker = ConversionWorker(
@@ -432,10 +442,10 @@ class MainWindow(QMainWindow):
         worker.start()
 
     def _on_conversion_progress(
-            self,
-            current: int,
-            total: int,
-            filename: str,
+        self,
+        current: int,
+        total: int,
+        filename: str,
     ) -> None:
         """Оновлює прогрес і назву поточного файла."""
 
@@ -450,8 +460,8 @@ class MainWindow(QMainWindow):
         )
 
     def _on_file_conversion_finished(
-            self,
-            result: ConversionResult,
+        self,
+        result: ConversionResult,
     ) -> None:
         """Зберігає результат обробки одного файла."""
 
@@ -467,16 +477,16 @@ class MainWindow(QMainWindow):
             )
 
     def _on_conversion_finished(
-            self,
-            success_count: int,
-            failure_count: int,
+        self,
+        success_count: int,
+        failure_count: int,
     ) -> None:
-        """Показує підсумок пакетної конвертації."""
+        """Формує підсумок пакетної конвертації."""
 
         worker = self._conversion_worker
         interrupted = (
-                worker is not None
-                and worker.isInterruptionRequested()
+            worker is not None
+            and worker.isInterruptionRequested()
         )
 
         processed_count = success_count + failure_count
@@ -484,6 +494,13 @@ class MainWindow(QMainWindow):
         if interrupted:
             message = (
                 "Конвертацію скасовано. "
+                f"Оброблено: {processed_count}; "
+                f"успішно: {success_count}; "
+                f"помилок: {failure_count}."
+            )
+        elif self._conversion_error is not None:
+            message = (
+                "Конвертацію перервано через критичну помилку. "
                 f"Оброблено: {processed_count}; "
                 f"успішно: {success_count}; "
                 f"помилок: {failure_count}."
@@ -496,6 +513,19 @@ class MainWindow(QMainWindow):
             )
 
         self.statusBar().showMessage(message)
+
+        # Під час закриття вікна не показуємо модальні діалоги.
+        if self._close_after_conversion:
+            return
+
+        # Критичну помилку показуємо лише в одному діалозі.
+        if self._conversion_error is not None:
+            QMessageBox.critical(
+                self,
+                "Критична помилка конвертації",
+                f"{message}\n\n{self._conversion_error}",
+            )
+            return
 
         if failure_count:
             errors = [
@@ -526,20 +556,17 @@ class MainWindow(QMainWindow):
             )
 
     def _on_conversion_failed(self, error: str) -> None:
-        """Повідомляє про неочікувану помилку робочого потоку."""
+        """Зберігає текст критичної помилки для підсумкового діалогу."""
+
+        self._conversion_error = error
 
         self.statusBar().showMessage(
-            "Під час виконання конвертації сталася помилка."
-        )
-
-        QMessageBox.critical(
-            self,
-            "Помилка конвертації",
-            error,
+            "Під час виконання конвертації сталася критична помилка."
         )
 
     def _reset_conversion_progress(self) -> None:
         """Скидає індикатор прогресу конвертації."""
+
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("Готовність: %p%")
         self.progress_bar.hide()
@@ -560,11 +587,16 @@ class MainWindow(QMainWindow):
         )
 
     def _on_worker_stopped(self) -> None:
-        """Відновлює інтерфейс після зупинки потоку."""
+        """Відновлює інтерфейс після завершення потоку."""
 
         worker = self._conversion_worker
 
         if worker is not None:
+            # finished сигналізує, що run() завершився.
+            # wait(0) додатково перевіряє завершення потоку.
+            if worker.isRunning():
+                return
+
             worker.deleteLater()
 
         self._conversion_worker = None
@@ -575,3 +607,48 @@ class MainWindow(QMainWindow):
         self.cancel_conversion_button.hide()
 
         self._reset_conversion_progress()
+
+        # Якщо закриття було відкладене до завершення потоку,
+        # повторно викликаємо закриття вже без активного worker.
+        if self._close_after_conversion:
+            self._close_after_conversion = False
+            self.close()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Безпечно обробляє закриття вікна."""
+
+        worker = self._conversion_worker
+
+        if worker is None or not worker.isRunning():
+            event.accept()
+            return
+
+        answer = QMessageBox.question(
+            self,
+            "Конвертація виконується",
+            (
+                "Конвертація ще триває.\n\n"
+                "Скасувати пакетну операцію та закрити MacTools?\n"
+                "Поточний файл спочатку завершить обробку."
+            ),
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if answer != QMessageBox.StandardButton.Yes:
+            event.ignore()
+            return
+
+        self._close_after_conversion = True
+        self.setEnabled(False)
+
+        worker.requestInterruption()
+
+        self.statusBar().showMessage(
+            "Завершення поточної операції перед закриттям…"
+        )
+
+        # Не блокуємо GUI через worker.wait().
+        # Вікно закриється після сигналу finished.
+        event.ignore()

@@ -56,6 +56,7 @@ class ConversionPanel(QFrame):
         self.format_combo.addItem("WebP (.webp)", "webp")
         self.format_combo.addItem("TIFF (.tiff)", "tiff")
         self.format_combo.addItem("BMP (.bmp)", "bmp")
+        self.format_combo.addItem("PDF (.pdf)", "pdf")
 
         format_layout.addWidget(self.format_label)
         format_layout.addWidget(self.format_combo, 1)
