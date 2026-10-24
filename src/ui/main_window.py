@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTabBar,
     QVBoxLayout,
-    QWidget,
+    QWidget, QProgressBar,
 )
 
 from src.config import (
@@ -24,7 +24,8 @@ from src.config import (
 )
 from src.converters.registry import ConverterRegistry
 from src.converters.setup import create_default_registry
-from src.services.conversion_service import ConversionService
+from src.services.conversion_service import ConversionService, ConversionResult
+from src.services.conversion_worker import ConversionWorker
 from src.ui.conversion_panel import ConversionPanel
 from src.ui.drop_area import DropArea
 from src.ui.file_info_panel import FileInfoPanel
@@ -44,22 +45,23 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_DISPLAY_NAME)
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
 
-        # Колекція доданих файлів.
         self.file_manager = FileManager()
 
-        # Реєстр доступних конвертерів.
         self.converter_registry = (
             registry
             if registry is not None
             else create_default_registry()
         )
 
-        # Сервіс конвертації.
         self.conversion_service = ConversionService(
             self.converter_registry
         )
 
         self._active_category = "Усі"
+
+        # Стан поточної конвертації.
+        self._conversion_worker: ConversionWorker | None = None
+        self._conversion_results: list[ConversionResult] = []
 
         self._setup_ui()
         self._connect_signals()
@@ -132,13 +134,13 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(self.category_tabs)
 
-        # Основна область: список файлів та інформація.
+        # Список файлів та інформаційна панель.
         content_layout = QHBoxLayout()
         content_layout.setSpacing(14)
 
         self.files_panel = FileListPanel(self)
 
-        # Зберігаємо сумісність із наявними методами.
+        # Сумісність із наявними методами.
         self.files_list = self.files_panel.files_list
         self.files_count_label = self.files_panel.count_label
 
@@ -149,9 +151,37 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(content_layout, 1)
 
-        # Панель налаштування конвертації.
+        # Панель конвертації.
         self.conversion_panel = ConversionPanel(self)
         main_layout.addWidget(self.conversion_panel)
+
+        # Індикатор прогресу.
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setObjectName("conversionProgressBar")
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setFormat("Готовність: %p%")
+        self.progress_bar.hide()
+
+        main_layout.addWidget(self.progress_bar)
+
+        # Кнопка скасування поточної пакетної операції.
+        self.cancel_conversion_button = QPushButton(
+            "Скасувати конвертацію"
+        )
+        self.cancel_conversion_button.setObjectName(
+            "cancelConversionButton"
+        )
+        self.cancel_conversion_button.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
+        self.cancel_conversion_button.hide()
+
+        main_layout.addWidget(
+            self.cancel_conversion_button,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
 
         self.setCentralWidget(central_widget)
 
@@ -171,6 +201,10 @@ class MainWindow(QMainWindow):
 
         self.conversion_panel.convert_requested.connect(
             self._convert_files
+        )
+
+        self.cancel_conversion_button.clicked.connect(
+            self._cancel_conversion
         )
 
     def _add_files(self, paths: list[str]) -> None:
@@ -221,12 +255,20 @@ class MainWindow(QMainWindow):
     def _clear_files(self) -> None:
         """Очищає список доданих файлів."""
 
+        if self._conversion_worker is not None:
+            self.statusBar().showMessage(
+                "Не можна очистити список під час конвертації."
+            )
+            return
+
         if self.file_manager.count == 0:
+            self._reset_conversion_progress()
             self.statusBar().showMessage("Список уже порожній.")
             return
 
         self.file_manager.clear()
         self._refresh_file_list()
+        self._reset_conversion_progress()
 
         self.statusBar().showMessage("Список файлів очищено.")
 
@@ -294,27 +336,30 @@ class MainWindow(QMainWindow):
             output_format: str,
             output_directory: str,
     ) -> None:
-        """Конвертує вибрані файли або всі файли зі списку."""
+        """Запускає пакетну конвертацію у фоновому потоці."""
 
-        output_path = Path(output_directory).expanduser()
+        if self._conversion_worker is not None:
+            self.statusBar().showMessage(
+                "Конвертація вже виконується."
+            )
+            return
 
         if not output_directory:
             self.statusBar().showMessage(
-                "Вкажіть папку для збереження результатів."
+                "Вкажіть папку для результатів."
             )
             return
+
+        output_path = Path(output_directory).expanduser()
 
         if not output_path.is_dir():
             QMessageBox.warning(
                 self,
                 "Папку не знайдено",
-                "Вибрана папка для результатів не існує. "
-                "Виберіть наявну папку.",
+                "Виберіть наявну папку для результатів.",
             )
             return
 
-        # Якщо користувач виділив елементи, обробляємо їх.
-        # Інакше беремо всі файли зі списку.
         selected_items = self.files_list.selectedItems()
 
         if selected_items:
@@ -327,8 +372,6 @@ class MainWindow(QMainWindow):
         else:
             source_paths = list(self.file_manager.files.values())
 
-        # До конвертації допускаємо лише наявні файли,
-        # а не папки.
         files_to_convert = [
             path
             for path in source_paths
@@ -343,28 +386,121 @@ class MainWindow(QMainWindow):
             )
             return
 
-        results = self.conversion_service.convert_files(
+        self._conversion_results.clear()
+
+        self.progress_bar.setRange(0, len(files_to_convert))
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat(
+            f"0 із {len(files_to_convert)} файлів"
+        )
+        self.progress_bar.show()
+
+        self.cancel_conversion_button.show()
+        self.conversion_panel.convert_button.setEnabled(False)
+
+        self.statusBar().showMessage(
+            f"Підготовлено файлів до конвертації: "
+            f"{len(files_to_convert)}."
+        )
+
+        worker = ConversionWorker(
+            service=self.conversion_service,
             sources=files_to_convert,
             output_directory=output_path,
             output_format=output_format,
+            parent=self,
         )
 
-        success_count = sum(
-            result.success for result in results
-        )
-        failure_count = len(results) - success_count
+        self._conversion_worker = worker
 
-        message = (
-            f"Конвертацію завершено. Успішно: {success_count}; "
-            f"помилок: {failure_count}."
+        worker.progress_changed.connect(
+            self._on_conversion_progress
         )
+        worker.file_finished.connect(
+            self._on_file_conversion_finished
+        )
+        worker.conversion_finished.connect(
+            self._on_conversion_finished
+        )
+        worker.conversion_failed.connect(
+            self._on_conversion_failed
+        )
+        worker.finished.connect(
+            self._on_worker_stopped
+        )
+
+        worker.start()
+
+    def _on_conversion_progress(
+            self,
+            current: int,
+            total: int,
+            filename: str,
+    ) -> None:
+        """Оновлює прогрес і назву поточного файла."""
+
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(current - 1)
+        self.progress_bar.setFormat(
+            f"{current} із {total}: {filename}"
+        )
+
+        self.statusBar().showMessage(
+            f"Конвертація файла {current} із {total}: {filename}"
+        )
+
+    def _on_file_conversion_finished(
+            self,
+            result: ConversionResult,
+    ) -> None:
+        """Зберігає результат обробки одного файла."""
+
+        self._conversion_results.append(result)
+
+        if result.success:
+            self.statusBar().showMessage(
+                f"Готово: {result.source.name}"
+            )
+        else:
+            self.statusBar().showMessage(
+                f"Помилка: {result.source.name}"
+            )
+
+    def _on_conversion_finished(
+            self,
+            success_count: int,
+            failure_count: int,
+    ) -> None:
+        """Показує підсумок пакетної конвертації."""
+
+        worker = self._conversion_worker
+        interrupted = (
+                worker is not None
+                and worker.isInterruptionRequested()
+        )
+
+        processed_count = success_count + failure_count
+
+        if interrupted:
+            message = (
+                "Конвертацію скасовано. "
+                f"Оброблено: {processed_count}; "
+                f"успішно: {success_count}; "
+                f"помилок: {failure_count}."
+            )
+        else:
+            message = (
+                "Конвертацію завершено. "
+                f"Успішно: {success_count}; "
+                f"помилок: {failure_count}."
+            )
 
         self.statusBar().showMessage(message)
 
         if failure_count:
             errors = [
                 f"{result.source.name}: {result.error}"
-                for result in results
+                for result in self._conversion_results
                 if not result.success
             ]
 
@@ -385,5 +521,57 @@ class MainWindow(QMainWindow):
                 self,
                 "Результати конвертації",
                 f"{message}\n"
-                f"Папка результатів:\n{output_path}",
+                f"Папка результатів:\n"
+                f"{self.conversion_panel.output_directory_edit.text()}",
             )
+
+    def _on_conversion_failed(self, error: str) -> None:
+        """Повідомляє про неочікувану помилку робочого потоку."""
+
+        self.statusBar().showMessage(
+            "Під час виконання конвертації сталася помилка."
+        )
+
+        QMessageBox.critical(
+            self,
+            "Помилка конвертації",
+            error,
+        )
+
+    def _reset_conversion_progress(self) -> None:
+        """Скидає індикатор прогресу конвертації."""
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("Готовність: %p%")
+        self.progress_bar.hide()
+
+    def _cancel_conversion(self) -> None:
+        """Просить фоновий потік припинити пакетну обробку."""
+
+        worker = self._conversion_worker
+
+        if worker is None or not worker.isRunning():
+            return
+
+        worker.requestInterruption()
+        self.cancel_conversion_button.setEnabled(False)
+
+        self.statusBar().showMessage(
+            "Скасування запитано. Завершується поточний файл."
+        )
+
+    def _on_worker_stopped(self) -> None:
+        """Відновлює інтерфейс після зупинки потоку."""
+
+        worker = self._conversion_worker
+
+        if worker is not None:
+            worker.deleteLater()
+
+        self._conversion_worker = None
+
+        self.conversion_panel.convert_button.setEnabled(True)
+
+        self.cancel_conversion_button.setEnabled(True)
+        self.cancel_conversion_button.hide()
+
+        self._reset_conversion_progress()
