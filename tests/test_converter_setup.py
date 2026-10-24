@@ -2,6 +2,7 @@
 
 import unittest
 
+from src.converters.document_converter import DocumentConverter
 from src.converters.image_converter import ImageConverter
 from src.converters.pdf_converter import PDFConverter
 from src.converters.registry import ConverterRegistry
@@ -30,6 +31,13 @@ class TestConverterSetup(unittest.TestCase):
 
         self.assertIsInstance(converter, PDFConverter)
 
+    def test_document_converter_is_registered(self):
+        registry = create_default_registry()
+
+        converter = registry.get("Document Converter")
+
+        self.assertIsInstance(converter, DocumentConverter)
+
     def test_find_converter_for_png_to_jpeg(self):
         registry = create_default_registry()
 
@@ -51,6 +59,20 @@ class TestConverterSetup(unittest.TestCase):
 
         self.assertIsInstance(converter, PDFConverter)
 
+    def test_find_converter_for_docx_to_txt(self):
+        registry = create_default_registry()
+
+        converter = registry.find("docx", "txt")
+
+        self.assertIsInstance(converter, DocumentConverter)
+
+    def test_find_converter_for_rtf_to_docx(self):
+        registry = create_default_registry()
+
+        converter = registry.find("rtf", "docx")
+
+        self.assertIsInstance(converter, DocumentConverter)
+
     def test_find_converter_ignores_format_case(self):
         registry = create_default_registry()
 
@@ -58,11 +80,11 @@ class TestConverterSetup(unittest.TestCase):
 
         self.assertIsInstance(converter, ImageConverter)
 
-    def test_default_registry_contains_two_converters(self):
+    def test_default_registry_contains_three_converters(self):
         registry = create_default_registry()
 
-        self.assertEqual(len(registry), 2)
+        self.assertEqual(len(registry), 3)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

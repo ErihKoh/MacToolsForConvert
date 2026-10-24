@@ -58,3 +58,14 @@ def ensure_app_directories() -> None:
     """Створює необхідні папки застосунку."""
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# Системні утиліти для конвертації
+TEXTUTIL_PATH = Path("/usr/bin/textutil")
+
+LIBREOFFICE_PATH = Path(
+    "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+)
+
+# Обмеження часу виконання конвертації
+CONVERTER_TIMEOUT_SECONDS = 60

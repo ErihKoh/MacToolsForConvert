@@ -1,5 +1,5 @@
 """Створення стандартного реєстру конвертерів."""
-
+from src.converters.document_converter import DocumentConverter
 from src.converters.image_converter import ImageConverter
 from src.converters.pdf_converter import PDFConverter
 from src.converters.registry import ConverterRegistry
@@ -12,5 +12,6 @@ def create_default_registry() -> ConverterRegistry:
 
     registry.register(ImageConverter())
     registry.register(PDFConverter())
+    registry.register(DocumentConverter())
 
     return registry

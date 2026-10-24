@@ -39,7 +39,6 @@ class ConversionPanel(QFrame):
         # Заголовок панелі.
         self.title_label = QLabel("Конвертація файлів")
         self.title_label.setObjectName("sectionLabel")
-
         main_layout.addWidget(self.title_label)
 
         # Вибір вихідного формату.
@@ -51,22 +50,29 @@ class ConversionPanel(QFrame):
 
         self.format_combo = QComboBox()
         self.format_combo.setObjectName("outputFormatCombo")
-        self.format_combo.addItem("JPEG (.jpg)", "jpg")
-        self.format_combo.addItem("PNG (.png)", "png")
-        self.format_combo.addItem("WebP (.webp)", "webp")
-        self.format_combo.addItem("TIFF (.tiff)", "tiff")
-        self.format_combo.addItem("BMP (.bmp)", "bmp")
-        self.format_combo.addItem("PDF (.pdf)", "pdf")
+
+        formats = [
+            ("JPEG (.jpg)", "jpg"),
+            ("PNG (.png)", "png"),
+            ("WebP (.webp)", "webp"),
+            ("TIFF (.tiff)", "tiff"),
+            ("BMP (.bmp)", "bmp"),
+            ("PDF (.pdf)", "pdf"),
+            ("Word (.docx)", "docx"),
+            ("Текст (.txt)", "txt"),
+            ("Rich Text (.rtf)", "rtf"),
+        ]
+
+        for label, extension in formats:
+            self.format_combo.addItem(label, extension)
 
         format_layout.addWidget(self.format_label)
         format_layout.addWidget(self.format_combo, 1)
-
         main_layout.addLayout(format_layout)
 
         # Вибір папки для результатів.
         directory_label = QLabel("Папка для результатів:")
         directory_label.setObjectName("fieldLabel")
-
         main_layout.addWidget(directory_label)
 
         directory_layout = QHBoxLayout()
@@ -91,7 +97,6 @@ class ConversionPanel(QFrame):
 
         directory_layout.addWidget(self.output_directory_edit, 1)
         directory_layout.addWidget(self.browse_directory_button)
-
         main_layout.addLayout(directory_layout)
 
         # Кнопка запуску.
@@ -112,7 +117,6 @@ class ConversionPanel(QFrame):
         self.browse_directory_button.clicked.connect(
             self._browse_output_directory
         )
-
         self.convert_button.clicked.connect(
             self._request_conversion
         )
