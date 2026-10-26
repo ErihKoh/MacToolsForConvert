@@ -1,6 +1,7 @@
 """Тести конвертера документів DOCX, TXT і RTF."""
 
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,6 +9,11 @@ from pathlib import Path
 from src.converters.document_converter import DocumentConverter
 
 
+@unittest.skipUnless(
+    sys.platform == "darwin"
+    and DocumentConverter.TEXTUTIL_PATH.is_file(),
+    "Потрібна macOS із системною утилітою textutil.",
+)
 class TestDocumentConverter(unittest.TestCase):
     """Перевіряє конвертацію документів через textutil."""
 

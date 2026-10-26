@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 from pathlib import Path
@@ -132,15 +133,17 @@ class DocumentConverter(BaseConverter):
                 dir=destination.parent,
                 delete=False,
             ) as temporary_file:
-                temporary_path = Path(temporary_file.name)
+                temporary_path = Path(temporary_file.name).resolve()
 
+            # Абсолютні шляхи починаються з «/», тому ім'я файла
+            # на кшталт «-x.txt» не буде сприйняте як опція.
             command = [
                 str(TEXTUTIL_PATH),
                 "-convert",
                 destination_format,
                 "-output",
                 str(temporary_path),
-                str(source),
+                str(source.resolve()),
             ]
 
             self._run_command(command, "textutil")
@@ -173,6 +176,7 @@ class DocumentConverter(BaseConverter):
             )
 
         temporary_directory: Path | None = None
+        profile_directory: Path | None = None
 
         try:
             temporary_directory = Path(
@@ -180,21 +184,39 @@ class DocumentConverter(BaseConverter):
                     prefix="mactools_",
                     dir=destination.parent,
                 )
-            )
+            ).resolve()
+
+            # Окремий профіль: LibreOffice не конфліктує з уже
+            # запущеним екземпляром і не чіпає профіль користувача.
+            profile_directory = Path(
+                tempfile.mkdtemp(prefix="mactools_lo_profile_")
+            ).resolve()
 
             command = [
                 str(LIBREOFFICE_PATH),
+                f"-env:UserInstallation={profile_directory.as_uri()}",
                 "--headless",
                 "--convert-to",
                 "pdf",
                 "--outdir",
                 str(temporary_directory),
-                str(source),
+                str(source.resolve()),
             ]
 
             self._run_command(command, "LibreOffice")
 
-            generated_pdf = temporary_directory / f"{source.stem}.pdf"
+            # Не покладаємося на ім'я результату: у папці лише
+            # файли, створені цією конвертацією.
+            generated_files = sorted(
+                temporary_directory.glob("*.pdf")
+            )
+
+            if len(generated_files) != 1:
+                raise ValueError(
+                    "LibreOffice не створив коректний PDF-файл."
+                )
+
+            generated_pdf = generated_files[0]
 
             if (
                 not generated_pdf.is_file()
@@ -208,36 +230,61 @@ class DocumentConverter(BaseConverter):
             return destination
 
         finally:
-            if temporary_directory is not None:
-                shutil.rmtree(
-                    temporary_directory,
-                    ignore_errors=True,
-                )
+            for directory in (temporary_directory, profile_directory):
+                if directory is not None:
+                    shutil.rmtree(directory, ignore_errors=True)
+
+    @staticmethod
+    def _kill_process_group(process: subprocess.Popen) -> None:
+        """Завершує процес разом із усіма його дочірніми процесами."""
+
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            # Група вже завершилась або недоступна: гасимо сам процес.
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
 
     @staticmethod
     def _run_command(command: list[str], program_name: str) -> None:
-        """Запускає зовнішню програму з обмеженням часу."""
+        """Запускає зовнішню програму з обмеженням часу.
+
+        Процес запускається в окремій сесії, тому при таймауті
+        завершується вся група (наприклад, soffice і soffice.bin).
+        """
+
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            start_new_session=True,
+        )
 
         try:
-            completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=CONVERTER_TIMEOUT_SECONDS,
-                check=False,
+            stdout, stderr = process.communicate(
+                timeout=CONVERTER_TIMEOUT_SECONDS
             )
         except subprocess.TimeoutExpired as exc:
+            DocumentConverter._kill_process_group(process)
+            process.communicate()
             raise TimeoutError(
                 "Конвертація перевищила ліміт у "
                 f"{CONVERTER_TIMEOUT_SECONDS} секунд."
             ) from exc
+        except BaseException:
+            DocumentConverter._kill_process_group(process)
+            process.communicate()
+            raise
 
-        if completed.returncode != 0:
+        if process.returncode != 0:
             details = (
-                completed.stderr.strip()
-                or completed.stdout.strip()
+                stderr.strip()
+                or stdout.strip()
                 or "Причину не повідомлено."
             )
             raise ValueError(

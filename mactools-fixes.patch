@@ -1,0 +1,383 @@
+diff --git a/src/converters/document_converter.py b/src/converters/document_converter.py
+index d867e71..fc530c9 100644
+--- a/src/converters/document_converter.py
++++ b/src/converters/document_converter.py
+@@ -2,6 +2,7 @@
+ 
+ import os
+ import shutil
++import signal
+ import subprocess
+ import tempfile
+ from pathlib import Path
+@@ -132,15 +133,17 @@ class DocumentConverter(BaseConverter):
+                 dir=destination.parent,
+                 delete=False,
+             ) as temporary_file:
+-                temporary_path = Path(temporary_file.name)
++                temporary_path = Path(temporary_file.name).resolve()
+ 
++            # Абсолютні шляхи починаються з «/», тому ім'я файла
++            # на кшталт «-x.txt» не буде сприйняте як опція.
+             command = [
+                 str(TEXTUTIL_PATH),
+                 "-convert",
+                 destination_format,
+                 "-output",
+                 str(temporary_path),
+-                str(source),
++                str(source.resolve()),
+             ]
+ 
+             self._run_command(command, "textutil")
+@@ -173,6 +176,7 @@ class DocumentConverter(BaseConverter):
+             )
+ 
+         temporary_directory: Path | None = None
++        profile_directory: Path | None = None
+ 
+         try:
+             temporary_directory = Path(
+@@ -180,21 +184,39 @@ class DocumentConverter(BaseConverter):
+                     prefix="mactools_",
+                     dir=destination.parent,
+                 )
+-            )
++            ).resolve()
++
++            # Окремий профіль: LibreOffice не конфліктує з уже
++            # запущеним екземпляром і не чіпає профіль користувача.
++            profile_directory = Path(
++                tempfile.mkdtemp(prefix="mactools_lo_profile_")
++            ).resolve()
+ 
+             command = [
+                 str(LIBREOFFICE_PATH),
++                f"-env:UserInstallation={profile_directory.as_uri()}",
+                 "--headless",
+                 "--convert-to",
+                 "pdf",
+                 "--outdir",
+                 str(temporary_directory),
+-                str(source),
++                str(source.resolve()),
+             ]
+ 
+             self._run_command(command, "LibreOffice")
+ 
+-            generated_pdf = temporary_directory / f"{source.stem}.pdf"
++            # Не покладаємося на ім'я результату: у папці лише
++            # файли, створені цією конвертацією.
++            generated_files = sorted(
++                temporary_directory.glob("*.pdf")
++            )
++
++            if len(generated_files) != 1:
++                raise ValueError(
++                    "LibreOffice не створив коректний PDF-файл."
++                )
++
++            generated_pdf = generated_files[0]
+ 
+             if (
+                 not generated_pdf.is_file()
+@@ -208,36 +230,61 @@ class DocumentConverter(BaseConverter):
+             return destination
+ 
+         finally:
+-            if temporary_directory is not None:
+-                shutil.rmtree(
+-                    temporary_directory,
+-                    ignore_errors=True,
+-                )
++            for directory in (temporary_directory, profile_directory):
++                if directory is not None:
++                    shutil.rmtree(directory, ignore_errors=True)
++
++    @staticmethod
++    def _kill_process_group(process: subprocess.Popen) -> None:
++        """Завершує процес разом із усіма його дочірніми процесами."""
++
++        try:
++            os.killpg(process.pid, signal.SIGKILL)
++        except (ProcessLookupError, PermissionError):
++            # Група вже завершилась або недоступна: гасимо сам процес.
++            try:
++                process.kill()
++            except ProcessLookupError:
++                pass
+ 
+     @staticmethod
+     def _run_command(command: list[str], program_name: str) -> None:
+-        """Запускає зовнішню програму з обмеженням часу."""
++        """Запускає зовнішню програму з обмеженням часу.
++
++        Процес запускається в окремій сесії, тому при таймауті
++        завершується вся група (наприклад, soffice і soffice.bin).
++        """
++
++        process = subprocess.Popen(
++            command,
++            stdout=subprocess.PIPE,
++            stderr=subprocess.PIPE,
++            text=True,
++            encoding="utf-8",
++            errors="replace",
++            start_new_session=True,
++        )
+ 
+         try:
+-            completed = subprocess.run(
+-                command,
+-                capture_output=True,
+-                text=True,
+-                encoding="utf-8",
+-                errors="replace",
+-                timeout=CONVERTER_TIMEOUT_SECONDS,
+-                check=False,
++            stdout, stderr = process.communicate(
++                timeout=CONVERTER_TIMEOUT_SECONDS
+             )
+         except subprocess.TimeoutExpired as exc:
++            DocumentConverter._kill_process_group(process)
++            process.communicate()
+             raise TimeoutError(
+                 "Конвертація перевищила ліміт у "
+                 f"{CONVERTER_TIMEOUT_SECONDS} секунд."
+             ) from exc
++        except BaseException:
++            DocumentConverter._kill_process_group(process)
++            process.communicate()
++            raise
+ 
+-        if completed.returncode != 0:
++        if process.returncode != 0:
+             details = (
+-                completed.stderr.strip()
+-                or completed.stdout.strip()
++                stderr.strip()
++                or stdout.strip()
+                 or "Причину не повідомлено."
+             )
+             raise ValueError(
+diff --git a/tests/test_document_converter.py b/tests/test_document_converter.py
+index 19cdfd3..e8e99e2 100644
+--- a/tests/test_document_converter.py
++++ b/tests/test_document_converter.py
+@@ -1,6 +1,7 @@
+ """Тести конвертера документів DOCX, TXT і RTF."""
+ 
+ import subprocess
++import sys
+ import tempfile
+ import unittest
+ from pathlib import Path
+@@ -8,6 +9,11 @@ from pathlib import Path
+ from src.converters.document_converter import DocumentConverter
+ 
+ 
++@unittest.skipUnless(
++    sys.platform == "darwin"
++    and DocumentConverter.TEXTUTIL_PATH.is_file(),
++    "Потрібна macOS із системною утилітою textutil.",
++)
+ class TestDocumentConverter(unittest.TestCase):
+     """Перевіряє конвертацію документів через textutil."""
+ 
+diff --git a/tests/test_document_converter_portable.py b/tests/test_document_converter_portable.py
+new file mode 100644
+index 0000000..e01bbf2
+--- /dev/null
++++ b/tests/test_document_converter_portable.py
+@@ -0,0 +1,191 @@
++"""Платформонезалежні тести DocumentConverter.
++
++Замість textutil і LibreOffice використовуються фальшиві скрипти,
++тому тести працюють на будь-якій POSIX-системі (macOS, Linux).
++"""
++
++import os
++import stat
++import subprocess
++import sys
++import tempfile
++import time
++import unittest
++from pathlib import Path
++from unittest.mock import patch
++
++from src.converters.document_converter import DocumentConverter
++
++MODULE = "src.converters.document_converter"
++
++FAKE_SOFFICE_OK = """#!/bin/sh
++prev=""
++outdir=""
++for arg in "$@"; do
++  printf '%s\\n' "$arg" >> "$(dirname "$0")/args.txt"
++  if [ "$prev" = "--outdir" ]; then outdir="$arg"; fi
++  prev="$arg"
++done
++printf '%%PDF-1.4 fake' > "$outdir/unexpected_name.pdf"
++"""
++
++FAKE_SOFFICE_NO_OUTPUT = "#!/bin/sh\nexit 0\n"
++
++FAKE_SOFFICE_FAIL = "#!/bin/sh\necho 'boom' >&2\nexit 3\n"
++
++FAKE_SOFFICE_HANG = """#!/bin/sh
++sleep 60 &
++echo $! > "$(dirname "$0")/child.pid"
++wait
++"""
++
++
++def _process_alive(pid: int) -> bool:
++    """Повертає True, якщо процес існує і не є зомбі."""
++
++    result = subprocess.run(
++        ["ps", "-o", "stat=", "-p", str(pid)],
++        capture_output=True,
++        text=True,
++        check=False,
++    )
++    state = result.stdout.strip()
++    return bool(state) and not state.startswith("Z")
++
++
++@unittest.skipIf(
++    sys.platform == "win32",
++    "Потрібна POSIX-система.",
++)
++class TestDocumentConverterPortable(unittest.TestCase):
++    """Перевіряє логіку запуску зовнішніх програм."""
++
++    def setUp(self):
++        self.temp = tempfile.TemporaryDirectory()
++        self.addCleanup(self.temp.cleanup)
++        self.root = Path(self.temp.name).resolve()
++
++        self.output = self.root / "out"
++        self.output.mkdir()
++
++        self.source = self.root / "sample.docx"
++        self.source.write_bytes(b"not a real docx")
++
++        self.converter = DocumentConverter()
++
++    def _fake_soffice(self, script: str) -> Path:
++        path = self.root / "fake_soffice"
++        path.write_text(script, encoding="utf-8")
++        path.chmod(path.stat().st_mode | stat.S_IXUSR)
++        return path
++
++    def _args(self) -> list[str]:
++        return (
++            (self.root / "args.txt")
++            .read_text(encoding="utf-8")
++            .splitlines()
++        )
++
++    def test_pdf_found_even_if_name_differs(self):
++        fake = self._fake_soffice(FAKE_SOFFICE_OK)
++        destination = self.output / "result.pdf"
++
++        with patch(f"{MODULE}.LIBREOFFICE_PATH", fake):
++            result = self.converter.convert(self.source, destination)
++
++        self.assertEqual(result, destination)
++        self.assertTrue(destination.is_file())
++        self.assertGreater(destination.stat().st_size, 0)
++
++    def test_libreoffice_uses_separate_profile_and_cleans_up(self):
++        fake = self._fake_soffice(FAKE_SOFFICE_OK)
++        destination = self.output / "result.pdf"
++
++        with patch(f"{MODULE}.LIBREOFFICE_PATH", fake):
++            self.converter.convert(self.source, destination)
++
++        profile_args = [
++            arg for arg in self._args()
++            if arg.startswith("-env:UserInstallation=file://")
++        ]
++        self.assertEqual(len(profile_args), 1)
++
++        profile_path = Path(
++            profile_args[0].removeprefix("-env:UserInstallation=file://")
++        )
++        self.assertFalse(profile_path.exists())
++
++        # У папці результатів не лишилось тимчасових папок.
++        self.assertEqual(
++            [p.name for p in self.output.iterdir()],
++            ["result.pdf"],
++        )
++
++    def test_dash_prefixed_source_is_passed_as_absolute_path(self):
++        fake = self._fake_soffice(FAKE_SOFFICE_OK)
++        dashed = self.root / "-weird.docx"
++        dashed.write_bytes(b"x")
++
++        previous_cwd = Path.cwd()
++        os.chdir(self.root)
++        self.addCleanup(os.chdir, previous_cwd)
++
++        with patch(f"{MODULE}.LIBREOFFICE_PATH", fake):
++            self.converter.convert(
++                Path("-weird.docx"),
++                self.output / "result.pdf",
++            )
++
++        # Останній аргумент — вхідний файл.
++        source_arg = self._args()[-1]
++        self.assertTrue(source_arg.startswith("/"))
++        self.assertTrue(source_arg.endswith("/-weird.docx"))
++
++    def test_missing_pdf_raises_value_error(self):
++        fake = self._fake_soffice(FAKE_SOFFICE_NO_OUTPUT)
++
++        with patch(f"{MODULE}.LIBREOFFICE_PATH", fake):
++            with self.assertRaises(ValueError):
++                self.converter.convert(
++                    self.source,
++                    self.output / "result.pdf",
++                )
++
++        self.assertEqual(list(self.output.iterdir()), [])
++
++    def test_nonzero_exit_reports_stderr(self):
++        fake = self._fake_soffice(FAKE_SOFFICE_FAIL)
++
++        with patch(f"{MODULE}.LIBREOFFICE_PATH", fake):
++            with self.assertRaisesRegex(ValueError, "boom"):
++                self.converter.convert(
++                    self.source,
++                    self.output / "result.pdf",
++                )
++
++    def test_timeout_kills_child_processes(self):
++        fake = self._fake_soffice(FAKE_SOFFICE_HANG)
++
++        with patch(f"{MODULE}.LIBREOFFICE_PATH", fake), patch(
++            f"{MODULE}.CONVERTER_TIMEOUT_SECONDS", 1
++        ):
++            with self.assertRaises(TimeoutError):
++                self.converter.convert(
++                    self.source,
++                    self.output / "result.pdf",
++                )
++
++        child_pid = int(
++            (self.root / "child.pid").read_text().strip()
++        )
++
++        deadline = time.monotonic() + 3
++        while _process_alive(child_pid) and time.monotonic() < deadline:
++            time.sleep(0.1)
++
++        self.assertFalse(_process_alive(child_pid))
++        self.assertEqual(list(self.output.iterdir()), [])
++
++
++if __name__ == "__main__":
++    unittest.main()
