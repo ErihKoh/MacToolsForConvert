@@ -64,6 +64,39 @@ class TestConversionPanel(unittest.TestCase):
         self.assertFalse(self.panel.format_combo.isEnabled())
         self.assertEqual(self.panel.format_combo.currentData(), "")
 
+    def test_shows_message_when_no_formats_available(self) -> None:
+        """Показує повідомлення, якщо форматів немає."""
+
+        self.panel.set_available_formats(set())
+
+        self.assertEqual(
+            self.panel.format_combo.count(),
+            1,
+        )
+        self.assertEqual(
+            self.panel.format_combo.currentText(),
+            "Немає сумісних форматів",
+        )
+        self.assertEqual(
+            self.panel.format_combo.currentData(),
+            "",
+        )
+
+    def test_replaces_empty_state_when_formats_become_available(self) -> None:
+        """Замінює повідомлення реальними форматами."""
+
+        self.panel.set_available_formats(set())
+
+        self.panel.set_available_formats({"png", "pdf"})
+
+        actual_formats = {
+            self.panel.format_combo.itemData(index)
+            for index in range(self.panel.format_combo.count())
+        }
+
+        self.assertEqual(actual_formats, {"png", "pdf"})
+        self.assertTrue(self.panel.format_combo.isEnabled())
+        self.assertTrue(self.panel.convert_button.isEnabled())
     def test_emits_conversion_request(self) -> None:
         self.panel.set_available_formats({"png"})
         self.panel.output_directory_edit.setText("/tmp")

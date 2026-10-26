@@ -22,6 +22,32 @@ DOCUMENT_FORMATS: frozenset[str] = frozenset({
     "txt",
 })
 
+# Вхідні відеоформати.
+VIDEO_INPUT_FORMATS: frozenset[str] = frozenset({
+    "mp4",
+    "mts",
+    "m2ts",
+    "mov",
+    "mkv",
+    "avi",
+    "webm",
+    "mpeg",
+    "mpg",
+    "ts",
+    "3gp",
+})
+
+# Вихідні відеоформати першої версії.
+# Спочатку реалізуємо конвертацію в MP4.
+VIDEO_OUTPUT_FORMATS: frozenset[str] = frozenset({
+    "mp4",
+})
+
+# Усі відеоформати, які потрібно враховувати в інтерфейсі.
+VIDEO_FORMATS: frozenset[str] = (
+    VIDEO_INPUT_FORMATS | VIDEO_OUTPUT_FORMATS
+)
+
 # Формати, які PDFConverter може створювати з PDF.
 PDF_OUTPUT_IMAGE_FORMATS: frozenset[str] = frozenset({
     "png",
@@ -42,6 +68,19 @@ FORMAT_DISPLAY_NAMES: dict[str, str] = {
     "docx": "Word Document",
     "rtf": "Rich Text Format",
     "txt": "Plain Text",
+    "mp4": "MP4 Video",
+    "mts": "AVCHD Video (MTS)",
+    "m2ts": "AVCHD Video (M2TS)",
+    "mov": "QuickTime Video",
+    "mkv": "Matroska Video",
+    "avi": "AVI Video",
+    "webm": "WebM Video",
+    "mpeg": "MPEG Video",
+    "mpg": "MPEG Video",
+    "ts": "MPEG Transport Stream",
+    "3gp": "3GPP Video",
+    "heic": "HEIC Image (iPhone)",
+    "heif": "HEIF Image",
 }
 
 

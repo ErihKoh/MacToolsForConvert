@@ -102,22 +102,34 @@ class TestFileManager(unittest.TestCase):
         self.assertEqual(self.manager.count, 1)
 
     def test_filter_by_category(self) -> None:
-        """Фільтр повертає файли вибраної категорії."""
+        """Фільтр повертає всі підтримувані категорією зображення."""
 
         image = self.root / "photo.png"
+        heic_image = self.root / "photo.heic"
+        heif_image = self.root / "photo.heif"
         document = self.root / "notes.txt"
 
         image.write_bytes(b"image")
+        heic_image.write_bytes(b"heic")
+        heif_image.write_bytes(b"heif")
         document.write_text("Тест", encoding="utf-8")
 
-        self.manager.add_files([str(image), str(document)])
+        self.manager.add_files([
+            str(image),
+            str(heic_image),
+            str(heif_image),
+            str(document),
+        ])
 
         result = self.manager.get_filtered_files("Зображення")
 
-        self.assertEqual(len(result), 1)
+        result_names = {
+            path.name for path in result.values()
+        }
+
         self.assertEqual(
-            next(iter(result.values())).name,
-            "photo.png",
+            result_names,
+            {"photo.png", "photo.heic", "photo.heif"},
         )
 
     def test_filter_all(self) -> None:

@@ -4,8 +4,13 @@ from pathlib import Path
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from pillow_heif import register_heif_opener
+
 from src.converters.base import BaseConverter
 from src.converters.formats import FORMAT_MAP
+
+# Реєструємо підтримку HEIF/HEIC у Pillow.
+register_heif_opener()
 
 
 class ImageConverter(BaseConverter):
@@ -22,7 +27,7 @@ class ImageConverter(BaseConverter):
     @property
     def supported_input_formats(self) -> set[str]:
         """Підтримувані формати вхідних зображень."""
-        return set(FORMAT_MAP)
+        return set(FORMAT_MAP) | {"heic", "heif"}
 
     @property
     def supported_output_formats(self) -> set[str]:

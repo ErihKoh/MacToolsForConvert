@@ -5,6 +5,7 @@ import unittest
 from src.converters.document_converter import DocumentConverter
 from src.converters.image_converter import ImageConverter
 from src.converters.pdf_converter import PDFConverter
+from src.converters.video_converter import VideoConverter
 from src.converters.registry import ConverterRegistry
 from src.converters.setup import create_default_registry
 
@@ -37,6 +38,13 @@ class TestConverterSetup(unittest.TestCase):
         converter = registry.get("Document Converter")
 
         self.assertIsInstance(converter, DocumentConverter)
+
+    def test_video_converter_is_registered(self):
+        registry = create_default_registry()
+
+        converter = registry.find("mts", "mp4")
+
+        self.assertIsInstance(converter, VideoConverter)
 
     def test_find_converter_for_png_to_jpeg(self):
         registry = create_default_registry()
@@ -80,10 +88,10 @@ class TestConverterSetup(unittest.TestCase):
 
         self.assertIsInstance(converter, ImageConverter)
 
-    def test_default_registry_contains_three_converters(self):
+    def test_default_registry_contains_four_converters(self):
         registry = create_default_registry()
 
-        self.assertEqual(len(registry), 3)
+        self.assertEqual(len(registry), 4)
 
 
 if __name__ == '__main__':

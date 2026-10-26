@@ -41,7 +41,7 @@ class ConversionService:
 
         source_path = Path(source).expanduser()
         output_path = Path(output_directory).expanduser()
-        target_format = output_format.lower().lstrip(".")
+        target_format = output_format.strip().lower().lstrip(".")
 
         try:
             if not source_path.is_file():
@@ -128,24 +128,48 @@ class ConversionService:
         sources: Iterable[str | Path],
         output_formats: Iterable[str],
     ) -> set[str]:
-        """Повертає формати, сумісні з усіма вхідними файлами."""
+        """Повертає доступні формати для всіх вхідних файлів.
+
+        Формат включається до результату, якщо кожен вхідний файл
+        підтримується відповідним конвертером і конвертер доступний
+        у поточному середовищі.
+        """
 
         source_paths = [Path(source) for source in sources]
 
         if not source_paths:
             return set()
 
-        return {
-            output_format
-            for output_format in output_formats
-            if all(
+        available_formats: set[str] = set()
+
+        for output_format in output_formats:
+            target_format = output_format.strip().lower().lstrip(".")
+
+            if not target_format:
+                continue
+
+            converters = [
                 self._registry.find(
                     path.suffix.lower().lstrip("."),
-                    output_format,
-                ) is not None
+                    target_format,
+                )
                 for path in source_paths
-            )
-        }
+            ]
+
+            if any(converter is None for converter in converters):
+                continue
+
+            if all(
+                converter.is_available_for(
+                    path.suffix.lower().lstrip("."),
+                    target_format,
+                )
+                for path, converter in zip(source_paths, converters)
+                if converter is not None
+            ):
+                available_formats.add(target_format)
+
+        return available_formats
 
     @staticmethod
     def _build_destination(
@@ -157,6 +181,7 @@ class ConversionService:
         """Створює вільне ім'я вихідного файла."""
 
         base_name = source_path.stem
+
         candidate = output_directory / (
             f"{base_name}{suffix}.{output_format}"
         )

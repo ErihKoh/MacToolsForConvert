@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 # Основні параметри застосунку
 APP_NAME = "MacTools"
 APP_DISPLAY_NAME = "MacTools — File Tools"
@@ -18,10 +17,10 @@ TEMP_DIR = Path.home() / "Library" / "Caches" / "MacTools"
 OUTPUT_DIR = Path.home() / "Documents" / "MacTools"
 
 # Початкові параметри головного вікна
-WINDOW_WIDTH = 1120
-WINDOW_HEIGHT = 760
+WINDOW_WIDTH = 960
+WINDOW_HEIGHT = 440
 WINDOW_MIN_WIDTH = 850
-WINDOW_MIN_HEIGHT = 580
+WINDOW_MIN_HEIGHT = 400
 
 # Параметри інтерфейсу
 DEFAULT_THEME = "dark"
@@ -31,7 +30,8 @@ DEFAULT_LANGUAGE = "uk"
 CATEGORIES = {
     "Зображення": {
         ".jpg", ".jpeg", ".png", ".gif", ".bmp",
-        ".tiff", ".tif", ".webp", ".heic", ".svg", ".ico",
+        ".tiff", ".tif", ".webp", ".heic", ".heif",
+        ".svg", ".ico",
     },
     "PDF": {
         ".pdf",

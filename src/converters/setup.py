@@ -3,6 +3,7 @@ from src.converters.document_converter import DocumentConverter
 from src.converters.image_converter import ImageConverter
 from src.converters.pdf_converter import PDFConverter
 from src.converters.registry import ConverterRegistry
+from src.converters.video_converter import VideoConverter
 
 
 def create_default_registry() -> ConverterRegistry:
@@ -13,5 +14,6 @@ def create_default_registry() -> ConverterRegistry:
     registry.register(ImageConverter())
     registry.register(PDFConverter())
     registry.register(DocumentConverter())
+    registry.register(VideoConverter())
 
     return registry

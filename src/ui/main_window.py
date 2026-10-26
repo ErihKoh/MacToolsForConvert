@@ -550,6 +550,11 @@ class MainWindow(QMainWindow):
 
         self.conversion_panel.set_conversion_idle()
 
+    def _reset_conversion_progress(self) -> None:
+        """Скидає індикатор прогресу конвертації."""
+
+        self.conversion_panel.set_conversion_idle()
+
     def _on_worker_stopped(self) -> None:
         """Відновлює інтерфейс після завершення фонового потоку."""
 

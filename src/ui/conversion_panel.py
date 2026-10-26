@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.config import OUTPUT_DIR
-from src.converters.formats import IMAGE_FORMATS, PDF_FORMATS, DOCUMENT_FORMATS, normalize_format, \
+from src.converters.formats import IMAGE_FORMATS, PDF_FORMATS, DOCUMENT_FORMATS, VIDEO_FORMATS, normalize_format, \
     get_format_display_name
 
 
@@ -25,7 +25,7 @@ class ConversionPanel(QFrame):
     """"Панель вибору формату та папки для конвертації."""
     convert_requested = Signal(str, str)
 
-    ALL_FORMATS = set(IMAGE_FORMATS) | set(PDF_FORMATS) | set(DOCUMENT_FORMATS)
+    ALL_FORMATS = set(IMAGE_FORMATS) | set(PDF_FORMATS) | set(DOCUMENT_FORMATS | set(VIDEO_FORMATS))
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -166,7 +166,7 @@ class ConversionPanel(QFrame):
         """Відновлює початковий стан панелі."""
 
         self.convert_button.setEnabled(
-            self.format_combo.count() > 0
+            bool(self.format_combo.currentData())
         )
 
         self.cancel_conversion_button.setEnabled(True)
@@ -193,10 +193,29 @@ class ConversionPanel(QFrame):
         self.format_combo.blockSignals(True)
         self.format_combo.clear()
 
+        display_formats: dict[str, str] = {}
+
+        # Для кожної назви формату залишаємо одне розширення.
+        preferred_extensions = {
+            "JPEG Image": "jpg",
+            "TIFF Image": "tif",
+        }
+
         for extension in sorted(available):
+            display_name = get_format_display_name(extension)
+
+            if display_name not in display_formats:
+                display_formats[display_name] = extension
+
+            preferred = preferred_extensions.get(display_name)
+
+            if preferred == extension:
+                display_formats[display_name] = preferred
+
+        for display_name in sorted(display_formats):
             self.format_combo.addItem(
-                get_format_display_name(extension),
-                extension,
+                display_name,
+                display_formats[display_name],
             )
 
         previous_index = self.format_combo.findData(previous_format)
@@ -206,15 +225,16 @@ class ConversionPanel(QFrame):
 
         self.format_combo.blockSignals(False)
 
-        has_formats = self.format_combo.count() > 0
-        self.format_combo.setEnabled(has_formats)
-        self.convert_button.setEnabled(has_formats)
+        has_formats = bool(available)
 
         if not has_formats:
             self.format_combo.addItem(
                 "Немає сумісних форматів",
                 "",
             )
+
+        self.format_combo.setEnabled(has_formats)
+        self.convert_button.setEnabled(has_formats)
 
     def _browse_output_directory(self) -> None:
         """Відкриває діалог вибору папки результатів."""

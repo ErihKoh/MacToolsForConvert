@@ -2,6 +2,7 @@
 
 import os
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from tempfile import TemporaryDirectory
 
@@ -60,6 +61,55 @@ class TestMainWindow(unittest.TestCase):
 
         information_mock.assert_called_once()
         self.assertIsNone(self.window.conversion_controller.worker)
+
+    def test_updates_formats_after_selecting_png(self) -> None:
+        """Після вибору PNG серед форматів доступний PDF."""
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "sample.png"
+            source.touch()
+
+            self.window._add_files([str(source)])
+
+            item = self.window.files_list.item(0)
+            item.setSelected(True)
+
+            available_formats = {
+                self.window.conversion_panel.format_combo.itemData(index)
+                for index in range(
+                    self.window.conversion_panel.format_combo.count()
+                )
+            }
+
+            self.assertIn("pdf", available_formats)
+            self.assertTrue(
+                self.window.conversion_panel.convert_button.isEnabled()
+            )
+
+    def test_clearing_files_removes_available_formats(self) -> None:
+        """Після очищення списку доступних форматів немає."""
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "sample.png"
+            source.touch()
+
+            self.window._add_files([str(source)])
+
+            item = self.window.files_list.item(0)
+            item.setSelected(True)
+
+            self.assertEqual(self.window.files_list.count(), 1)
+
+            self.window._clear_files()
+
+            self.assertEqual(self.window.files_list.count(), 0)
+            self.assertEqual(
+                self.window.conversion_panel.format_combo.currentData(),
+                "",
+            )
+            self.assertFalse(
+                self.window.conversion_panel.convert_button.isEnabled()
+            )
 
 
 if __name__ == "__main__":

@@ -57,3 +57,12 @@ class BaseConverter(ABC):
             source_format in input_formats
             and destination_format in output_formats
         )
+
+    def is_available_for(
+            self,
+            source_format: str,
+            destination_format: str,
+    ) -> bool:
+        """Перевіряє доступність операції в поточному середовищі."""
+
+        return self.can_convert(source_format, destination_format)

@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from PIL import Image
@@ -165,6 +166,63 @@ class TestConversionService(unittest.TestCase):
         )
 
         self.assertEqual(formats, set())
+
+    def test_docx_to_pdf_available_when_libreoffice_exists(self) -> None:
+        """DOCX → PDF доступний, якщо LibreOffice існує."""
+
+        source = self.root / "document.docx"
+        source.touch()
+
+        libreoffice = self.root / "soffice"
+        libreoffice.touch()
+
+        with patch(
+            "src.converters.document_converter.LIBREOFFICE_PATH",
+            libreoffice,
+        ):
+            formats = self.service.get_available_formats(
+                sources=[source],
+                output_formats=["pdf"],
+            )
+
+        self.assertEqual(formats, {"pdf"})
+
+    def test_docx_to_pdf_unavailable_without_libreoffice(self) -> None:
+        """DOCX → PDF недоступний, якщо LibreOffice відсутній."""
+
+        source = self.root / "document.docx"
+        source.touch()
+
+        missing_libreoffice = self.root / "missing" / "soffice"
+
+        with patch(
+            "src.converters.document_converter.LIBREOFFICE_PATH",
+            missing_libreoffice,
+        ):
+            formats = self.service.get_available_formats(
+                sources=[source],
+                output_formats=["pdf"],
+            )
+
+        self.assertEqual(formats, set())
+
+    def test_png_to_pdf_available_without_libreoffice(self) -> None:
+        """PNG → PDF доступний без LibreOffice."""
+
+        source = self.create_png()
+
+        missing_libreoffice = self.root / "missing" / "soffice"
+
+        with patch(
+            "src.converters.document_converter.LIBREOFFICE_PATH",
+            missing_libreoffice,
+        ):
+            formats = self.service.get_available_formats(
+                sources=[source],
+                output_formats=["pdf"],
+            )
+
+        self.assertEqual(formats, {"pdf"})
 
     def test_unsupported_format(self) -> None:
         """Перевіряє відмову від непідтримуваної пари форматів."""

@@ -66,6 +66,26 @@ class DocumentConverter(BaseConverter):
             and destination_format == "pdf"
         )
 
+    def is_available_for(
+            self,
+            source_format: str,
+            destination_format: str,
+    ) -> bool:
+        """Перевіряє доступність залежностей для конвертації."""
+
+        source_format = source_format.strip().lower().lstrip(".")
+        destination_format = (
+            destination_format.strip().lower().lstrip(".")
+        )
+
+        if not self.can_convert(source_format, destination_format):
+            return False
+
+        if source_format == "docx" and destination_format == "pdf":
+            return LIBREOFFICE_PATH.is_file()
+
+        return TEXTUTIL_PATH.is_file()
+
     def convert(self, source: Path, destination: Path) -> Path:
         """Конвертує документ, зберігаючи оригінал."""
 

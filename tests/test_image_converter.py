@@ -6,6 +6,8 @@ from pathlib import Path
 
 from PIL import Image
 
+from pillow_heif import from_pillow
+
 from src.converters.image_converter import ImageConverter
 
 
@@ -33,9 +35,20 @@ class TestImageConverter(unittest.TestCase):
         """Перевіряє назву конвертера."""
         self.assertEqual(self.converter.name, "Image Converter")
 
-    def test_supported_formats(self) -> None:
-        """Перевіряє перелік підтримуваних форматів."""
-        expected = {
+    def test_supported_formats(self):
+        expected_input = {
+            "jpg",
+            "jpeg",
+            "png",
+            "webp",
+            "tif",
+            "tiff",
+            "bmp",
+            "heic",
+            "heif",
+        }
+
+        expected_output = {
             "jpg",
             "jpeg",
             "png",
@@ -47,11 +60,11 @@ class TestImageConverter(unittest.TestCase):
 
         self.assertEqual(
             self.converter.supported_input_formats,
-            expected,
+            expected_input,
         )
         self.assertEqual(
             self.converter.supported_output_formats,
-            expected,
+            expected_output,
         )
 
     def test_can_convert_png_to_jpeg(self) -> None:
@@ -72,6 +85,49 @@ class TestImageConverter(unittest.TestCase):
             self.assertEqual(image.format, "JPEG")
             self.assertEqual(image.size, (20, 10))
             self.assertEqual(image.mode, "RGB")
+
+    def _create_heif_source(self, filename: str) -> Path:
+        """Створює тестове HEIF/HEIC-зображення."""
+        source = self.directory / filename
+
+        image = Image.new("RGB", (20, 10), (255, 0, 0))
+        heif_image = from_pillow(image)
+        heif_image.save(source)
+
+        return source
+
+    def test_convert_heic_to_jpeg(self) -> None:
+        """Перевіряє конвертацію HEIC у JPEG."""
+        source = self._create_heif_source("source.heic")
+        destination = self.directory / "result.jpg"
+
+        self.converter.convert(source, destination)
+
+        with Image.open(destination) as image:
+            self.assertEqual(image.format, "JPEG")
+            self.assertEqual(image.size, (20, 10))
+            self.assertEqual(image.mode, "RGB")
+
+    def test_convert_heif_to_png(self) -> None:
+        """Перевіряє конвертацію HEIF у PNG."""
+        source = self._create_heif_source("source.heif")
+        destination = self.directory / "result.png"
+
+        self.converter.convert(source, destination)
+
+        with Image.open(destination) as image:
+            self.assertEqual(image.format, "PNG")
+            self.assertEqual(image.size, (20, 10))
+
+    def test_heic_source_is_preserved(self) -> None:
+        """Перевіряє, що конвертація не змінює оригінал HEIC."""
+        source = self._create_heif_source("source.heic")
+        original_bytes = source.read_bytes()
+        destination = self.directory / "result.png"
+
+        self.converter.convert(source, destination)
+
+        self.assertEqual(source.read_bytes(), original_bytes)
 
     def test_convert_png_to_webp(self) -> None:
         """Перевіряє конвертацію PNG у WebP."""

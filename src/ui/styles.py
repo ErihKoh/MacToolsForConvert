@@ -59,7 +59,8 @@ QPushButton#browseButton {
     background-color: #3c78d8;
     border: none;
     border-radius: 8px;
-    padding: 10px 20px;
+    padding: 5px 20px;
+    min-height: 24px;
     font-size: 13px;
     font-weight: 600;
 }
@@ -221,7 +222,8 @@ QPushButton#browseButton {
     background-color: #3c78d8;
     border: none;
     border-radius: 8px;
-    padding: 10px 20px;
+    padding: 5px 20px;
+    min-height: 24px;
     font-size: 13px;
     font-weight: 600;
 }

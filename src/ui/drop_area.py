@@ -26,7 +26,7 @@ class DropArea(QFrame):
 
         self.setObjectName("dropArea")
         self.setAcceptDrops(True)
-        self.setMinimumHeight(220)
+        self.setMinimumHeight(160)
 
         self._setup_ui()
 
@@ -34,8 +34,8 @@ class DropArea(QFrame):
         """Створює інтерфейс області перетягування."""
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 28, 24, 28)
-        layout.setSpacing(12)
+        layout.setContentsMargins(24, 12, 24, 12)
+        layout.setSpacing(8)
 
         self.icon_label = QLabel("＋")
         self.icon_label.setObjectName("dropIcon")
