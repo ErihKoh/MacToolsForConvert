@@ -37,6 +37,37 @@ class TestConversionPanel(unittest.TestCase):
         self.assertTrue(self.panel.format_combo.isEnabled())
         self.assertTrue(self.panel.convert_button.isEnabled())
 
+    def test_format_display_names_are_unique(self) -> None:
+        """Перевіряє відсутність повторів назв форматів."""
+        self.panel.set_available_formats(
+            {"jpg", "jpeg", "png", "tif", "tiff", "bmp"}
+        )
+
+        display_names = [
+            self.panel.format_combo.itemText(index)
+            for index in range(self.panel.format_combo.count())
+        ]
+
+        self.assertEqual(
+            len(display_names),
+            len(set(display_names)),
+        )
+
+    def test_preferred_extensions_for_jpeg_and_tiff(self) -> None:
+        """Перевіряє вибір JPG і TIF для JPEG та TIFF."""
+        self.panel.set_available_formats(
+            {"jpg", "jpeg", "tif", "tiff"}
+        )
+
+        actual_formats = {
+            self.panel.format_combo.itemText(index):
+                self.panel.format_combo.itemData(index)
+            for index in range(self.panel.format_combo.count())
+        }
+
+        self.assertEqual(actual_formats.get("JPEG Image"), "jpg")
+        self.assertEqual(actual_formats.get("TIFF Image"), "tif")
+
     def test_normalizes_format_extensions(self) -> None:
         self.panel.set_available_formats({".PNG", " JPG ", "pdf"})
 
@@ -97,6 +128,7 @@ class TestConversionPanel(unittest.TestCase):
         self.assertEqual(actual_formats, {"png", "pdf"})
         self.assertTrue(self.panel.format_combo.isEnabled())
         self.assertTrue(self.panel.convert_button.isEnabled())
+
     def test_emits_conversion_request(self) -> None:
         self.panel.set_available_formats({"png"})
         self.panel.output_directory_edit.setText("/tmp")
