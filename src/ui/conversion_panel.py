@@ -18,14 +18,14 @@ from PySide6.QtWidgets import (
 
 from src.config import OUTPUT_DIR
 from src.converters.formats import IMAGE_FORMATS, PDF_FORMATS, DOCUMENT_FORMATS, VIDEO_FORMATS, normalize_format, \
-    get_format_display_name
+    get_format_display_name, AUDIO_FORMATS
 
 
 class ConversionPanel(QFrame):
     """"Панель вибору формату та папки для конвертації."""
     convert_requested = Signal(str, str)
 
-    ALL_FORMATS = set(IMAGE_FORMATS) | set(PDF_FORMATS) | set(DOCUMENT_FORMATS | set(VIDEO_FORMATS))
+    ALL_FORMATS = set(IMAGE_FORMATS) | set(PDF_FORMATS) | set(DOCUMENT_FORMATS | set(VIDEO_FORMATS) | set(AUDIO_FORMATS))
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)

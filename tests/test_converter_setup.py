@@ -42,6 +42,13 @@ class TestConverterSetup(unittest.TestCase):
     def test_video_converter_is_registered(self):
         registry = create_default_registry()
 
+        converter = registry.get("Audio Converter")
+
+        self.assertIsNotNone(converter)
+
+    def test_audio_converter_is_registered(self):
+        registry = create_default_registry()
+
         converter = registry.find("mts", "mp4")
 
         self.assertIsInstance(converter, VideoConverter)
@@ -88,10 +95,10 @@ class TestConverterSetup(unittest.TestCase):
 
         self.assertIsInstance(converter, ImageConverter)
 
-    def test_default_registry_contains_four_converters(self):
+    def test_default_registry_contains_five_converters(self):
         registry = create_default_registry()
 
-        self.assertEqual(len(registry), 4)
+        self.assertEqual(len(registry), 5)
 
 
 if __name__ == '__main__':

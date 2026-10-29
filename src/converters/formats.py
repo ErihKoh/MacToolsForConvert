@@ -37,6 +37,33 @@ VIDEO_INPUT_FORMATS: frozenset[str] = frozenset({
     "3gp",
 })
 
+# Вхідні аудіоформати.
+AUDIO_INPUT_FORMATS: frozenset[str] = frozenset({
+    "mp3",
+    "wav",
+    "flac",
+    "m4a",
+    "aac",
+    "ogg",
+    "opus",
+})
+
+# Вихідні аудіоформати.
+AUDIO_OUTPUT_FORMATS: frozenset[str] = frozenset({
+    "mp3",
+    "wav",
+    "flac",
+    "m4a",
+    "aac",
+    "ogg",
+    "opus",
+})
+
+# Усі аудіоформати для інтерфейсу.
+AUDIO_FORMATS: frozenset[str] = (
+    AUDIO_INPUT_FORMATS | AUDIO_OUTPUT_FORMATS
+)
+
 # Вихідні відеоформати першої версії.
 # Спочатку реалізуємо конвертацію в MP4.
 VIDEO_OUTPUT_FORMATS: frozenset[str] = frozenset({
@@ -81,6 +108,13 @@ FORMAT_DISPLAY_NAMES: dict[str, str] = {
     "3gp": "3GPP Video",
     "heic": "HEIC Image (iPhone)",
     "heif": "HEIF Image",
+    "mp3": "MP3 Audio",
+    "wav": "WAV Audio",
+    "flac": "FLAC Audio",
+    "m4a": "M4A Audio",
+    "aac": "AAC Audio",
+    "ogg": "OGG Audio",
+    "opus": "Opus Audio",
 }
 
 
