@@ -5,6 +5,7 @@ from src.converters.pdf_converter import PDFConverter
 from src.converters.registry import ConverterRegistry
 from src.converters.video_converter import VideoConverter
 from src.converters.audio_converter import AudioConverter
+from src.converters.ebook_converter import EbookConverter
 
 
 def create_default_registry() -> ConverterRegistry:
@@ -17,5 +18,6 @@ def create_default_registry() -> ConverterRegistry:
     registry.register(DocumentConverter())
     registry.register(VideoConverter())
     registry.register(AudioConverter())
+    registry.register(EbookConverter())
 
     return registry

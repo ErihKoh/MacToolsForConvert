@@ -8,6 +8,8 @@ from src.converters.pdf_converter import PDFConverter
 from src.converters.video_converter import VideoConverter
 from src.converters.registry import ConverterRegistry
 from src.converters.setup import create_default_registry
+from src.converters.audio_converter import AudioConverter
+from src.converters.ebook_converter import EbookConverter
 
 
 class TestConverterSetup(unittest.TestCase):
@@ -42,16 +44,23 @@ class TestConverterSetup(unittest.TestCase):
     def test_video_converter_is_registered(self):
         registry = create_default_registry()
 
-        converter = registry.get("Audio Converter")
+        converter = registry.get("Video Converter")
 
-        self.assertIsNotNone(converter)
+        self.assertIsInstance(converter, VideoConverter)
 
     def test_audio_converter_is_registered(self):
         registry = create_default_registry()
 
-        converter = registry.find("mts", "mp4")
+        converter = registry.get("Audio Converter")
 
-        self.assertIsInstance(converter, VideoConverter)
+        self.assertIsInstance(converter, AudioConverter)
+
+    def test_ebook_converter_is_registered(self):
+        registry = create_default_registry()
+
+        converter = registry.get("Ebook Converter")
+
+        self.assertIsInstance(converter, EbookConverter)
 
     def test_find_converter_for_png_to_jpeg(self):
         registry = create_default_registry()
@@ -88,6 +97,34 @@ class TestConverterSetup(unittest.TestCase):
 
         self.assertIsInstance(converter, DocumentConverter)
 
+    def test_find_converter_for_fb2_to_epub(self):
+        registry = create_default_registry()
+
+        converter = registry.find("fb2", "epub")
+
+        self.assertIsInstance(converter, EbookConverter)
+
+    def test_find_converter_for_epub_to_fb2(self):
+        registry = create_default_registry()
+
+        converter = registry.find("epub", "fb2")
+
+        self.assertIsInstance(converter, EbookConverter)
+
+    def test_find_converter_for_pdf_to_epub(self):
+        registry = create_default_registry()
+
+        converter = registry.find("pdf", "epub")
+
+        self.assertIsInstance(converter, EbookConverter)
+
+    def test_find_converter_for_pdf_to_fb2(self):
+        registry = create_default_registry()
+
+        converter = registry.find("pdf", "fb2")
+
+        self.assertIsInstance(converter, EbookConverter)
+
     def test_find_converter_ignores_format_case(self):
         registry = create_default_registry()
 
@@ -95,10 +132,10 @@ class TestConverterSetup(unittest.TestCase):
 
         self.assertIsInstance(converter, ImageConverter)
 
-    def test_default_registry_contains_five_converters(self):
+    def test_default_registry_contains_six_converters(self):
         registry = create_default_registry()
 
-        self.assertEqual(len(registry), 5)
+        self.assertEqual(len(registry), 6)
 
 
 if __name__ == '__main__':

@@ -22,6 +22,22 @@ DOCUMENT_FORMATS: frozenset[str] = frozenset({
     "txt",
 })
 
+# Формати електронних книг.
+EBOOK_INPUT_FORMATS: frozenset[str] = frozenset({
+    "fb2",
+    "epub",
+    "pdf",
+})
+
+EBOOK_OUTPUT_FORMATS: frozenset[str] = frozenset({
+    "fb2",
+    "epub",
+})
+
+EBOOK_FORMATS: frozenset[str] = (
+        EBOOK_INPUT_FORMATS | EBOOK_OUTPUT_FORMATS
+)
+
 # Вхідні відеоформати.
 VIDEO_INPUT_FORMATS: frozenset[str] = frozenset({
     "mp4",
@@ -61,7 +77,7 @@ AUDIO_OUTPUT_FORMATS: frozenset[str] = frozenset({
 
 # Усі аудіоформати для інтерфейсу.
 AUDIO_FORMATS: frozenset[str] = (
-    AUDIO_INPUT_FORMATS | AUDIO_OUTPUT_FORMATS
+        AUDIO_INPUT_FORMATS | AUDIO_OUTPUT_FORMATS
 )
 
 # Вихідні відеоформати першої версії.
@@ -72,7 +88,7 @@ VIDEO_OUTPUT_FORMATS: frozenset[str] = frozenset({
 
 # Усі відеоформати, які потрібно враховувати в інтерфейсі.
 VIDEO_FORMATS: frozenset[str] = (
-    VIDEO_INPUT_FORMATS | VIDEO_OUTPUT_FORMATS
+        VIDEO_INPUT_FORMATS | VIDEO_OUTPUT_FORMATS
 )
 
 # Формати, які PDFConverter може створювати з PDF.
@@ -115,6 +131,8 @@ FORMAT_DISPLAY_NAMES: dict[str, str] = {
     "aac": "AAC Audio",
     "ogg": "OGG Audio",
     "opus": "Opus Audio",
+    "fb2": "FictionBook 2",
+    "epub": "EPUB eBook",
 }
 
 

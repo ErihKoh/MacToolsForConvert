@@ -67,5 +67,9 @@ LIBREOFFICE_PATH = Path(
     "/Applications/LibreOffice.app/Contents/MacOS/soffice"
 )
 
+CALIBRE_EBOOK_CONVERT_PATH = Path(
+    "/Applications/calibre.app/Contents/MacOS/ebook-convert"
+)
+
 # Обмеження часу виконання конвертації
 CONVERTER_TIMEOUT_SECONDS = 60

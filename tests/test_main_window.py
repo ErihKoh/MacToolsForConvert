@@ -39,7 +39,7 @@ class TestMainWindow(unittest.TestCase):
 
     def test_rejects_nonexistent_output_directory(self) -> None:
         with patch(
-            "src.ui.main_window.QMessageBox.warning"
+                "src.ui.main_window.QMessageBox.warning"
         ) as warning_mock:
             self.window._convert_files(
                 "png",
@@ -52,7 +52,7 @@ class TestMainWindow(unittest.TestCase):
     def test_rejects_conversion_when_no_files_exist(self) -> None:
         with TemporaryDirectory() as output_directory:
             with patch(
-                "src.ui.main_window.QMessageBox.information"
+                    "src.ui.main_window.QMessageBox.information"
             ) as information_mock:
                 self.window._convert_files(
                     "png",
@@ -85,6 +85,165 @@ class TestMainWindow(unittest.TestCase):
             self.assertTrue(
                 self.window.conversion_panel.convert_button.isEnabled()
             )
+
+    def test_updates_formats_after_selecting_fb2(self) -> None:
+        """Після вибору FB2 доступний EPUB."""
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "sample.fb2"
+            source.touch()
+
+            calibre = Path(directory) / "ebook-convert"
+            calibre.touch()
+
+            with patch(
+                    "src.converters.ebook_converter.EbookConverter.CALIBRE_PATH",
+                    calibre,
+            ):
+                self.window._add_files([str(source)])
+
+                item = self.window.files_list.item(0)
+                item.setSelected(True)
+
+                available_formats = {
+                    self.window.conversion_panel.format_combo.itemData(index)
+                    for index in range(
+                        self.window.conversion_panel.format_combo.count()
+                    )
+                }
+
+            self.assertEqual(available_formats, {"epub"})
+
+    def test_updates_formats_after_selecting_epub(self) -> None:
+        """Після вибору EPUB доступний FB2."""
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "sample.epub"
+            source.touch()
+
+            calibre = Path(directory) / "ebook-convert"
+            calibre.touch()
+
+            with patch(
+                    "src.converters.ebook_converter.EbookConverter.CALIBRE_PATH",
+                    calibre,
+            ):
+                self.window._add_files([str(source)])
+
+                item = self.window.files_list.item(0)
+                item.setSelected(True)
+
+                available_formats = {
+                    self.window.conversion_panel.format_combo.itemData(index)
+                    for index in range(
+                        self.window.conversion_panel.format_combo.count()
+                    )
+                }
+
+            self.assertEqual(available_formats, {"fb2"})
+
+    def test_updates_formats_after_selecting_pdf(self) -> None:
+        """Після вибору PDF доступні FB2 та EPUB."""
+
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "sample.pdf"
+            source.touch()
+
+            calibre = Path(directory) / "ebook-convert"
+            calibre.touch()
+
+            with patch(
+                    "src.converters.ebook_converter.EbookConverter.CALIBRE_PATH",
+                    calibre,
+            ):
+                self.window._add_files([str(source)])
+
+                item = self.window.files_list.item(0)
+                item.setSelected(True)
+
+                available_formats = {
+                    self.window.conversion_panel.format_combo.itemData(index)
+                    for index in range(
+                        self.window.conversion_panel.format_combo.count()
+                    )
+                }
+
+            self.assertTrue(
+                {"fb2", "epub"}.issubset(available_formats)
+            ),
+
+    def test_updates_formats_after_selecting_multiple_files(self) -> None:
+        """Для кількох файлів доступні лише спільні формати."""
+
+        with TemporaryDirectory() as directory:
+            png_file = Path(directory) / "sample.png"
+            png_file.touch()
+
+            jpg_file = Path(directory) / "sample.jpg"
+            jpg_file.touch()
+
+            self.window._add_files([
+                str(png_file),
+                str(jpg_file),
+            ])
+
+            self.window.files_list.item(0).setSelected(True)
+            self.window.files_list.item(1).setSelected(True)
+
+            available_formats = {
+                self.window.conversion_panel.format_combo.itemData(index)
+                for index in range(
+                    self.window.conversion_panel.format_combo.count()
+                )
+            }
+
+            self.assertTrue(
+                {"jpg", "webp", "png", "pdf"}.issubset(
+                    available_formats
+                )
+            )
+
+    def test_updates_formats_after_changing_selection(self) -> None:
+        """Формати оновлюються після зміни вибраних файлів."""
+
+        with TemporaryDirectory() as directory:
+            png_file = Path(directory) / "sample.png"
+            png_file.touch()
+
+            jpg_file = Path(directory) / "sample.jpg"
+            jpg_file.touch()
+
+            fb2_file = Path(directory) / "book.fb2"
+            fb2_file.touch()
+
+            calibre = Path(directory) / "ebook-convert"
+            calibre.touch()
+
+            with patch(
+                "src.converters.ebook_converter.EbookConverter.CALIBRE_PATH",
+                calibre,
+            ):
+                self.window._add_files([
+                    str(png_file),
+                    str(jpg_file),
+                    str(fb2_file),
+                ])
+
+                self.window.files_list.item(0).setSelected(True)
+                self.window.files_list.item(1).setSelected(True)
+
+                self.window.files_list.clearSelection()
+
+                self.window.files_list.item(2).setSelected(True)
+
+                available_formats = {
+                    self.window.conversion_panel.format_combo.itemData(index)
+                    for index in range(
+                        self.window.conversion_panel.format_combo.count()
+                    )
+                }
+
+            self.assertEqual(available_formats, {"epub"})
 
     def test_clearing_files_removes_available_formats(self) -> None:
         """Після очищення списку доступних форматів немає."""

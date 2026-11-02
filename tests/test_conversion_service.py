@@ -157,6 +157,29 @@ class TestConversionService(unittest.TestCase):
 
         self.assertEqual(formats, {"jpg", "webp", "png", "pdf"})
 
+    def test_get_available_formats_for_fb2_and_epub(self) -> None:
+        """Не повертає форматів без спільного напрямку конвертації."""
+
+        fb2_file = self.root / "book.fb2"
+        fb2_file.touch()
+
+        epub_file = self.root / "book.epub"
+        epub_file.touch()
+
+        calibre = self.root / "ebook-convert"
+        calibre.touch()
+
+        with patch(
+            "src.converters.ebook_converter.EbookConverter.CALIBRE_PATH",
+            calibre,
+        ):
+            formats = self.service.get_available_formats(
+                sources=[fb2_file, epub_file],
+                output_formats=["fb2", "epub"],
+            )
+
+        self.assertEqual(formats, set())
+
     def test_get_available_formats_for_empty_sources(self) -> None:
         """Повертає порожню множину без вхідних файлів."""
 
@@ -177,8 +200,8 @@ class TestConversionService(unittest.TestCase):
         libreoffice.touch()
 
         with patch(
-            "src.converters.document_converter.LIBREOFFICE_PATH",
-            libreoffice,
+                "src.converters.document_converter.LIBREOFFICE_PATH",
+                libreoffice,
         ):
             formats = self.service.get_available_formats(
                 sources=[source],
@@ -196,8 +219,8 @@ class TestConversionService(unittest.TestCase):
         missing_libreoffice = self.root / "missing" / "soffice"
 
         with patch(
-            "src.converters.document_converter.LIBREOFFICE_PATH",
-            missing_libreoffice,
+                "src.converters.document_converter.LIBREOFFICE_PATH",
+                missing_libreoffice,
         ):
             formats = self.service.get_available_formats(
                 sources=[source],
@@ -214,8 +237,8 @@ class TestConversionService(unittest.TestCase):
         missing_libreoffice = self.root / "missing" / "soffice"
 
         with patch(
-            "src.converters.document_converter.LIBREOFFICE_PATH",
-            missing_libreoffice,
+                "src.converters.document_converter.LIBREOFFICE_PATH",
+                missing_libreoffice,
         ):
             formats = self.service.get_available_formats(
                 sources=[source],
@@ -223,6 +246,85 @@ class TestConversionService(unittest.TestCase):
             )
 
         self.assertEqual(formats, {"pdf"})
+
+    def test_fb2_to_epub_available_when_calibre_exists(self) -> None:
+        """FB2 → EPUB доступний, якщо Calibre існує."""
+
+        source = self.root / "book.fb2"
+        source.touch()
+
+        calibre = self.root / "ebook-convert"
+        calibre.touch()
+
+        with patch(
+                "src.converters.ebook_converter.EbookConverter.CALIBRE_PATH",
+                calibre,
+        ):
+            formats = self.service.get_available_formats(
+                sources=[source],
+                output_formats=["epub", "fb2"],
+            )
+
+        self.assertEqual(formats, {"epub"})
+
+    def test_epub_to_fb2_available_when_calibre_exists(self) -> None:
+        """EPUB → FB2 доступний, якщо Calibre існує."""
+
+        source = self.root / "book.epub"
+        source.touch()
+
+        calibre = self.root / "ebook-convert"
+        calibre.touch()
+
+        with patch(
+                "src.converters.ebook_converter.EbookConverter.CALIBRE_PATH",
+                calibre,
+        ):
+            formats = self.service.get_available_formats(
+                sources=[source],
+                output_formats=["fb2", "epub"],
+            )
+
+        self.assertEqual(formats, {"fb2"})
+
+    def test_pdf_to_ebook_formats_available_when_calibre_exists(self) -> None:
+        """PDF → FB2 та EPUB доступні, якщо Calibre існує."""
+
+        source = self.root / "document.pdf"
+        source.touch()
+
+        calibre = self.root / "ebook-convert"
+        calibre.touch()
+
+        with patch(
+                "src.converters.ebook_converter.EbookConverter.CALIBRE_PATH",
+                calibre,
+        ):
+            formats = self.service.get_available_formats(
+                sources=[source],
+                output_formats=["fb2", "epub"],
+            )
+
+        self.assertEqual(formats, {"fb2", "epub"})
+
+    def test_ebook_conversion_unavailable_without_calibre(self) -> None:
+        """Конвертація електронних книг недоступна без Calibre."""
+
+        source = self.root / "book.fb2"
+        source.touch()
+
+        missing_calibre = self.root / "missing" / "ebook-convert"
+
+        with patch(
+                "src.converters.ebook_converter.EbookConverter.CALIBRE_PATH",
+                missing_calibre,
+        ):
+            formats = self.service.get_available_formats(
+                sources=[source],
+                output_formats=["epub"],
+            )
+
+        self.assertEqual(formats, set())
 
     def test_unsupported_format(self) -> None:
         """Перевіряє відмову від непідтримуваної пари форматів."""

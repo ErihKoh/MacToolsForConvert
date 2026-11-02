@@ -37,6 +37,42 @@ class TestConversionPanel(unittest.TestCase):
         self.assertTrue(self.panel.format_combo.isEnabled())
         self.assertTrue(self.panel.convert_button.isEnabled())
 
+    def test_displays_ebook_formats(self) -> None:
+        """Відображає формати електронних книг."""
+
+        self.panel.set_available_formats(
+            {"fb2", "epub", "pdf"}
+        )
+
+        actual_formats = {
+            self.panel.format_combo.itemData(index)
+            for index in range(self.panel.format_combo.count())
+        }
+
+        self.assertEqual(
+            actual_formats,
+            {"fb2", "epub", "pdf"},
+        )
+
+    def test_preserves_selected_ebook_format(self) -> None:
+        """Зберігає EPUB після оновлення списку форматів."""
+
+        self.panel.set_available_formats(
+            {"fb2", "epub", "pdf"}
+        )
+
+        epub_index = self.panel.format_combo.findData("epub")
+        self.panel.format_combo.setCurrentIndex(epub_index)
+
+        self.panel.set_available_formats(
+            {"fb2", "epub"}
+        )
+
+        self.assertEqual(
+            self.panel.format_combo.currentData(),
+            "epub",
+        )
+
     def test_format_display_names_are_unique(self) -> None:
         """Перевіряє відсутність повторів назв форматів."""
         self.panel.set_available_formats(
@@ -162,6 +198,45 @@ class TestConversionPanel(unittest.TestCase):
         self.panel._request_conversion()
 
         self.assertEqual(received, [])
+
+    def test_disables_conversion_while_running(self) -> None:
+        """Вимикає конвертацію під час виконання."""
+
+        self.panel.set_available_formats({"png"})
+
+        self.panel.set_conversion_running(total=3)
+
+        self.assertFalse(self.panel.convert_button.isEnabled())
+
+        self.assertTrue(self.panel.cancel_conversion_button.isEnabled())
+        self.assertFalse(self.panel.cancel_conversion_button.isHidden())
+
+        self.assertFalse(self.panel.progress_bar.isHidden())
+        self.assertEqual(self.panel.progress_bar.minimum(), 0)
+        self.assertEqual(self.panel.progress_bar.maximum(), 3)
+        self.assertEqual(self.panel.progress_bar.value(), 0)
+        self.assertEqual(
+            self.panel.progress_bar.format(),
+            "0 із 3 файлів",
+        )
+
+    def test_restores_idle_state_after_conversion(self) -> None:
+        """Відновлює початковий стан після конвертації."""
+
+        self.panel.set_available_formats({"png"})
+        self.panel.set_conversion_running(total=3)
+
+        self.panel.set_conversion_idle()
+
+        self.assertTrue(self.panel.convert_button.isEnabled())
+
+        self.assertTrue(self.panel.cancel_conversion_button.isHidden())
+        self.assertTrue(self.panel.progress_bar.isHidden())
+        self.assertEqual(self.panel.progress_bar.value(), 0)
+        self.assertEqual(
+            self.panel.progress_bar.format(),
+            "Готовність: %p%",
+        )
 
 
 if __name__ == "__main__":
